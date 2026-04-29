@@ -112,12 +112,17 @@
     <img class="header-logo" src="https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Banner.png" alt="Safe & Sound" />
     <span class="env-badge" id="envBadge">LOCAL</span>
   </div>
-  <div class="header-right"><span class="header-tag">Scheduler</span></div>
+  <div class="header-right" style="display:flex;align-items:center;gap:12px">
+    <button class="btn btn-secondary btn-sm" id="googleAuthBtn" style="display:none">Connect Calendar</button>
+    <span id="googleStatus" style="display:none;font-size:0.7rem;color:var(--success)"></span>
+    <span class="header-tag">Scheduler</span>
+  </div>
 </header>
 <main>
   <div class="status-bar">
     <span><span class="status-dot" id="apiDot"></span> API: <span id="apiStatus">checking...</span></span>
     <span id="dbStatus"></span>
+    <span id="googleCalStatus"></span>
   </div>
 
   <div class="card" style="margin-bottom:28px">
@@ -159,6 +164,9 @@
     </div>
     <div class="footer-actions">
       <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--off-white);cursor:pointer">
+        <input type="checkbox" id="syncGoogleCheckbox" checked /> Sync to Google Calendar
+      </label>
       <button class="btn btn-success" id="saveToDbBtn">Save to Database</button>
     </div>
   </div>
@@ -219,6 +227,82 @@ async function checkHealth() {
     document.getElementById("apiStatus").textContent = "offline (using local fallback)";
     document.getElementById("dbStatus").innerHTML = '<span class="status-dot err"></span> DB: offline';
     return false;
+  }
+}
+
+// ── Google Calendar auth ──
+let googleConnected = false;
+
+function handleOAuthCallback() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("auth") === "success") {
+    googleConnected = true;
+    updateGoogleUI();
+    history.replaceState({}, "", location.pathname);
+  } else if (params.get("auth") === "error") {
+    const msg = params.get("message") || "Unknown error";
+    updateGoogleUI();
+    history.replaceState({}, "", location.pathname);
+  }
+}
+
+async function checkGoogleStatus() {
+  try {
+    const resp = await apiJson("/api/auth/status");
+    googleConnected = resp.connected;
+  } catch (e) {
+    googleConnected = false;
+  }
+  updateGoogleUI();
+}
+
+function updateGoogleUI() {
+  const btn = document.getElementById("googleAuthBtn");
+  const status = document.getElementById("googleStatus");
+  const calStatus = document.getElementById("googleCalStatus");
+  const syncCheck = document.getElementById("syncGoogleCheckbox");
+
+  btn.style.display = "";
+  if (googleConnected) {
+    btn.textContent = "Disconnect Calendar";
+    btn.className = "btn btn-secondary btn-sm";
+    btn.onclick = disconnectGoogle;
+    status.style.display = "";
+    status.textContent = "Calendar connected";
+    status.style.color = "var(--success)";
+    if (calStatus) calStatus.innerHTML = '<span class="status-dot ok"></span> Google: connected';
+    if (syncCheck) syncCheck.disabled = false;
+  } else {
+    btn.textContent = "Connect Calendar";
+    btn.className = "btn btn-primary btn-sm";
+    btn.onclick = connectGoogle;
+    status.style.display = "none";
+    if (calStatus) calStatus.innerHTML = '<span class="status-dot" style="background:var(--grey)"></span> Google: not connected';
+    if (syncCheck) { syncCheck.checked = false; syncCheck.disabled = true; }
+  }
+}
+
+async function connectGoogle() {
+  try {
+    const data = await apiJson("/api/auth/google");
+    if (data.url) {
+      location.href = data.url;
+    } else {
+      alert("Google OAuth is not configured yet. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets.");
+    }
+  } catch (e) {
+    alert("Failed to start Google auth: " + e.message);
+  }
+}
+
+async function disconnectGoogle() {
+  if (!confirm("Disconnect Google Calendar? You'll need to re-authorize to sync events again.")) return;
+  try {
+    await apiJson("/api/auth/revoke", { method: "POST" });
+    googleConnected = false;
+    updateGoogleUI();
+  } catch (e) {
+    alert("Failed to disconnect: " + e.message);
   }
 }
 
@@ -566,10 +650,11 @@ document.getElementById("saveToDbBtn").onclick = async function () {
     }
 
     for (const [projectName, sess] of Object.entries(grouped)) {
-      await apiJson("/api/sessions", {
+      const resp = await apiJson("/api/sessions", {
         method: "POST",
         body: JSON.stringify({
           projectName,
+          createGoogleEvents: document.getElementById("syncGoogleCheckbox").checked && googleConnected,
           sessions: sess.map((s, i) => ({
             startTime: s.startTime,
             endTime: s.endTime,
@@ -580,6 +665,9 @@ document.getElementById("saveToDbBtn").onclick = async function () {
         }),
       });
       for (const s of sess) s.saved = true;
+      if (resp.googleCalendarSynced) {
+        console.log(`Synced ${resp.googleEventIds?.length || 0} events to Google Calendar`);
+      }
     }
     renderSessions();
     btn.textContent = "Saved!";
@@ -643,9 +731,11 @@ document.getElementById("clearSmartBtn").onclick = function () {
 
 // ── Init ──
 async function init() {
+  handleOAuthCallback();
   const healthy = await checkHealth();
   if (healthy) {
     await loadResources();
+    await checkGoogleStatus();
   } else {
     // Use mock resource data
     document.getElementById("resourcesList").innerHTML = `

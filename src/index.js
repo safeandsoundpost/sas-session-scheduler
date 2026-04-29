@@ -1,6 +1,11 @@
 const DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions";
 const CORS_ORIGIN = "https://sched.safeandsoundpost.com";
 const MODEL = "deepseek-chat";
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events";
+const REDIRECT_URI = "https://sas-scheduler.safeandsoundpost.workers.dev/api/auth/google/callback";
 
 function cors(request, headers = {}) {
   const origin = request?.headers?.get("Origin") || "";
@@ -46,6 +51,104 @@ async function isResourceBusy(db, resource, start, end, excludeSessionId = null)
   }
   const row = await db.prepare(query).bind(...params).first();
   return row.count > 0;
+}
+
+// ── Google OAuth helpers ──
+
+function generateState() {
+  return crypto.randomUUID();
+}
+
+async function getStoredToken(db) {
+  return db
+    .prepare("SELECT * FROM oauth_tokens ORDER BY id DESC LIMIT 1")
+    .first();
+}
+
+async function storeToken(db, email, accessToken, refreshToken, expiresIn) {
+  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  await db
+    .prepare(
+      "INSERT OR REPLACE INTO oauth_tokens (user_email, access_token, refresh_token, expires_at) VALUES (?, ?, ?, ?)"
+    )
+    .bind(email, accessToken, refreshToken, expiresAt)
+    .run();
+}
+
+async function refreshAccessToken(clientId, clientSecret, refreshToken) {
+  const resp = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Google token refresh failed: ${err}`);
+  }
+  return resp.json();
+}
+
+async function getValidToken(db, env) {
+  const row = await getStoredToken(db);
+  if (!row) return null;
+
+  // Check if expired (with 60s buffer)
+  if (new Date(row.expires_at) > new Date(Date.now() + 60000)) {
+    return { accessToken: row.access_token, email: row.user_email };
+  }
+
+  // Refresh
+  const data = await refreshAccessToken(
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
+    row.refresh_token
+  );
+  await storeToken(
+    db,
+    row.user_email,
+    data.access_token,
+    data.refresh_token || row.refresh_token,
+    data.expires_in || 3600
+  );
+  return { accessToken: data.access_token, email: row.user_email };
+}
+
+async function createCalendarEvent(accessToken, session, projectName) {
+  const start = new Date(session.startTime);
+  const end = new Date(session.endTime);
+  const resp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/primary/events`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        summary: `${projectName} - Mix Session ${session.sessionNumber || 1}`,
+        description: `Resources: ${[session.resource_person, session.resource_room].filter(Boolean).join(", ") || "none"}`,
+        start: {
+          dateTime: start.toISOString(),
+          timeZone: "America/Chicago",
+        },
+        end: {
+          dateTime: end.toISOString(),
+          timeZone: "America/Chicago",
+        },
+      }),
+    }
+  );
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Google Calendar API error: ${err}`);
+  }
+  const data = await resp.json();
+  return data.id;
 }
 
 // ── Call DeepSeek API for structured extraction ──
@@ -212,7 +315,7 @@ async function handleSuggest(request, env) {
 
 // ── Save sessions ──
 async function handleSaveSessions(request, env) {
-  const { projectName, client, sessions } = await request.json();
+  const { projectName, client, sessions, createGoogleEvents } = await request.json();
 
   if (!projectName || !sessions?.length) return error("projectName and sessions required");
 
@@ -230,6 +333,16 @@ async function handleSaveSessions(request, env) {
     }
   }
 
+  // Get Google token if available
+  let googleToken = null;
+  if (createGoogleEvents && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
+    try {
+      googleToken = await getValidToken(db, env);
+    } catch (e) {
+      console.error("Google auth error:", e.message);
+    }
+  }
+
   // Insert project
   const project = await db
     .prepare("INSERT INTO projects (name, client) VALUES (?, ?) RETURNING id")
@@ -238,25 +351,53 @@ async function handleSaveSessions(request, env) {
 
   // Insert sessions
   const insertedIds = [];
+  const googleEventIds = [];
   for (let i = 0; i < sessions.length; i++) {
     const s = sessions[i];
+    const person = s.person || s.resources?.[0] || null;
+    const room = s.room || s.resources?.[1] || null;
+
+    // Create Google Calendar event
+    let googleEventId = null;
+    if (googleToken) {
+      try {
+        googleEventId = await createCalendarEvent(googleToken.accessToken, {
+          startTime: s.startTime,
+          endTime: s.endTime,
+          sessionNumber: s.sessionNumber || i + 1,
+          resource_person: person,
+          resource_room: room,
+        }, projectName);
+        googleEventIds.push(googleEventId);
+      } catch (e) {
+        console.error("Google Calendar event creation failed:", e.message);
+      }
+    }
+
     const result = await db
       .prepare(
-        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status) VALUES (?, ?, ?, ?, ?, ?, 'suggested')"
+        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status, google_event_id) VALUES (?, ?, ?, ?, ?, ?, 'suggested', ?)"
       )
       .bind(
         project.id,
         s.sessionNumber || i + 1,
         s.startTime,
         s.endTime,
-        s.person || s.resources?.[0] || null,
-        s.room || s.resources?.[1] || null
+        person,
+        room,
+        googleEventId
       )
       .run();
     insertedIds.push(result.meta?.last_row_id || project.id + i);
   }
 
-  return json({ success: true, projectId: project.id, sessionIds: insertedIds }, 201);
+  return json({
+    success: true,
+    projectId: project.id,
+    sessionIds: insertedIds,
+    googleCalendarSynced: googleEventIds.length > 0,
+    googleEventIds: googleEventIds.length ? googleEventIds : undefined,
+  }, 201);
 }
 
 // ── List sessions ──
@@ -361,6 +502,110 @@ async function handleExportIcs(request) {
   });
 }
 
+// ── Google OAuth endpoints ──
+
+async function handleAuthGoogle(env) {
+  if (!env.GOOGLE_CLIENT_ID) return error("Google OAuth not configured", 501);
+
+  const state = generateState();
+  const params = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: "code",
+    scope: GOOGLE_SCOPES,
+    access_type: "offline",
+    prompt: "consent",
+    state,
+  });
+
+  return json({ url: `${GOOGLE_AUTH_URL}?${params.toString()}`, state });
+}
+
+async function handleAuthCallback(request, env) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+
+  const frontendUrl = CORS_ORIGIN;
+
+  if (error || !code) {
+    return Response.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(error || "No auth code received")}`, 302);
+  }
+
+  try {
+    const resp = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: REDIRECT_URI,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`Token exchange failed: ${err}`);
+    }
+
+    const data = await resp.json();
+
+    // Get user email from the access token
+    const userResp = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      { headers: { Authorization: `Bearer ${data.access_token}` } }
+    );
+    const userInfo = await userResp.json();
+
+    await storeToken(
+      env.DB,
+      userInfo.email,
+      data.access_token,
+      data.refresh_token,
+      data.expires_in || 3600
+    );
+
+    return Response.redirect(`${frontendUrl}?auth=success&email=${encodeURIComponent(userInfo.email)}`, 302);
+  } catch (e) {
+    console.error("OAuth callback error:", e.message);
+    return Response.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(e.message)}`, 302);
+  }
+}
+
+async function handleAuthStatus(env) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+    return json({ connected: false, reason: "not configured" });
+  }
+  try {
+    const token = await getValidToken(env.DB, env);
+    if (!token) return json({ connected: false });
+    return json({ connected: true, email: token.email });
+  } catch (e) {
+    return json({ connected: false, error: e.message });
+  }
+}
+
+async function handleAuthRevoke(env) {
+  const token = await getStoredToken(env.DB);
+  if (!token) return json({ success: true, message: "No token stored" });
+
+  try {
+    await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token: token.access_token }),
+    });
+  } catch (e) {
+    console.error("Revoke error:", e.message);
+  }
+
+  await env.DB.prepare("DELETE FROM oauth_tokens").run();
+  return json({ success: true, message: "Disconnected" });
+}
+
 // ── Main handler ──
 export default {
   async fetch(request, env) {
@@ -407,6 +652,26 @@ export default {
       // POST /api/export-ics
       if (path === "/api/export-ics" && method === "POST") {
         return handleExportIcs(request);
+      }
+
+      // GET /api/auth/google — initiate Google OAuth
+      if (path === "/api/auth/google" && method === "GET") {
+        return handleAuthGoogle(env);
+      }
+
+      // GET /api/auth/google/callback — OAuth callback
+      if (path === "/api/auth/google/callback" && method === "GET") {
+        return handleAuthCallback(request, env);
+      }
+
+      // GET /api/auth/status — check auth status
+      if (path === "/api/auth/status" && method === "GET") {
+        return handleAuthStatus(env);
+      }
+
+      // POST /api/auth/revoke — disconnect Google Calendar
+      if (path === "/api/auth/revoke" && method === "POST") {
+        return handleAuthRevoke(env);
       }
 
       return new Response("Not found", { status: 404, headers: cors(request) });
