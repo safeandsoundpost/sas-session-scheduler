@@ -171,8 +171,11 @@
     <div class="footer-actions">
       <div class="footer-actions-left">
         <label class="sync-label">
-          <input type="checkbox" id="syncGoogleCheckbox" checked /> Sync to Google Calendar
+          <input type="checkbox" id="syncGoogleCheckbox" checked /> Sync to
         </label>
+        <select id="calendarSelect" style="margin-left:6px;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.25rem 0.5rem;font-size:0.75rem;font-family:inherit;max-width:200px">
+          <option value="primary">Primary Calendar</option>
+        </select>
       </div>
       <div class="footer-actions-right">
         <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
@@ -280,6 +283,7 @@ function updateGoogleUI() {
     if (syncCheck) syncCheck.disabled = false;
     const searchBtn = document.getElementById("searchCalendarBtn");
     if (searchBtn) searchBtn.style.display = "";
+    loadCalendars();
   } else {
     btn.textContent = "Connect Calendar";
     btn.className = "btn btn-primary btn-sm";
@@ -289,6 +293,9 @@ function updateGoogleUI() {
     if (syncCheck) { syncCheck.checked = false; syncCheck.disabled = true; }
     const searchBtn = document.getElementById("searchCalendarBtn");
     if (searchBtn) searchBtn.style.display = "none";
+    // Reset calendar dropdown
+    const sel = document.getElementById("calendarSelect");
+    sel.innerHTML = '<option value="primary">Primary Calendar</option>';
   }
 }
 
@@ -324,6 +331,24 @@ async function disconnectGoogle() {
     updateGoogleUI();
   } catch (e) {
     alert("Failed to disconnect: " + e.message);
+  }
+}
+
+// ── Load available calendars ──
+async function loadCalendars() {
+  try {
+    const data = await apiJson("/api/calendars");
+    const sel = document.getElementById("calendarSelect");
+    sel.innerHTML = "";
+    for (const cal of (data.calendars || [])) {
+      const opt = document.createElement("option");
+      opt.value = cal.id;
+      opt.textContent = cal.summary + (cal.primary ? " (default)" : "");
+      if (cal.primary) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    console.log("Could not load calendars:", e.message);
   }
 }
 
@@ -410,7 +435,8 @@ document.getElementById("searchCalendarBtn").onclick = async function () {
   try {
     const start = new Date().toISOString();
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const data = await apiJson(`/api/calendar/search?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+    const calId = document.getElementById("calendarSelect").value;
+    const data = await apiJson(`/api/calendar/search?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&calendar_id=${encodeURIComponent(calId)}`);
     renderCalendarEvents(data.events);
   } catch (e) {
     if (e.message.includes("not connected")) {
@@ -815,6 +841,7 @@ document.getElementById("saveToDbBtn").onclick = async function () {
         body: JSON.stringify({
           projectName,
           createGoogleEvents: document.getElementById("syncGoogleCheckbox").checked && googleConnected,
+          calendarId: document.getElementById("calendarSelect").value,
           sessions: sess.map((s, i) => ({
             startTime: s.startTime,
             endTime: s.endTime,

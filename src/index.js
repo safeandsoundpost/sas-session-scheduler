@@ -113,26 +113,34 @@ async function getValidToken(db, env) {
 
   // Refresh (need a refresh token to refresh)
   if (!row.refresh_token) return null;
-  const data = await refreshAccessToken(
-    env.GOOGLE_CLIENT_ID,
-    env.GOOGLE_CLIENT_SECRET,
-    row.refresh_token
-  );
-  await storeToken(
-    db,
-    row.user_email,
-    data.access_token,
-    data.refresh_token || row.refresh_token,
-    data.expires_in || 3600
-  );
-  return { accessToken: data.access_token, email: row.user_email };
+  try {
+    const data = await refreshAccessToken(
+      env.GOOGLE_CLIENT_ID,
+      env.GOOGLE_CLIENT_SECRET,
+      row.refresh_token
+    );
+    await storeToken(
+      db,
+      row.user_email,
+      data.access_token,
+      data.refresh_token || row.refresh_token,
+      data.expires_in || 3600
+    );
+    return { accessToken: data.access_token, email: row.user_email };
+  } catch (e) {
+    console.error("Token refresh failed:", e.message);
+    // Clear the stale token so we don't keep failing
+    await db.prepare("DELETE FROM oauth_tokens").run();
+    return null;
+  }
 }
 
-async function createCalendarEvent(accessToken, session, projectName) {
+async function createCalendarEvent(accessToken, session, projectName, calendarId) {
+  const calId = calendarId || "primary";
   const start = new Date(session.startTime);
   const end = new Date(session.endTime);
   const resp = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events`,
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events`,
     {
       method: "POST",
       headers: {
@@ -325,7 +333,7 @@ async function handleSuggest(request, env) {
 
 // ── Save sessions ──
 async function handleSaveSessions(request, env) {
-  const { projectName, client, sessions, createGoogleEvents } = await request.json();
+  const { projectName, client, sessions, createGoogleEvents, calendarId } = await request.json();
 
   if (!projectName || !sessions?.length) return error("projectName and sessions required");
 
@@ -369,6 +377,7 @@ async function handleSaveSessions(request, env) {
 
     // Create Google Calendar event
     let googleEventId = null;
+    const calId = calendarId || "primary";
     if (googleToken) {
       try {
         googleEventId = await createCalendarEvent(googleToken.accessToken, {
@@ -377,7 +386,7 @@ async function handleSaveSessions(request, env) {
           sessionNumber: s.sessionNumber || i + 1,
           resource_person: person,
           resource_room: room,
-        }, projectName);
+        }, projectName, calId);
         googleEventIds.push(googleEventId);
       } catch (e) {
         console.error("Google Calendar event creation failed:", e.message);
@@ -388,7 +397,7 @@ async function handleSaveSessions(request, env) {
 
     const result = await db
       .prepare(
-        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status, google_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status, google_event_id, calendar_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .bind(
         project.id,
@@ -398,7 +407,8 @@ async function handleSaveSessions(request, env) {
         person,
         room,
         status,
-        googleEventId
+        googleEventId,
+        googleEventId ? calId : null
       )
       .run();
     insertedIds.push(result.meta?.last_row_id || project.id + i);
@@ -476,11 +486,12 @@ async function handleDeleteSession(request, env) {
 
   // Attempt to delete the Google Calendar event if it exists
   if (session.google_event_id) {
+    const calId = session.calendar_id || "primary";
     try {
       const token = await getValidToken(db, env);
       if (token) {
         await fetch(
-          `${GOOGLE_CALENDAR_API}/calendars/primary/events/${session.google_event_id}`,
+          `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${session.google_event_id}`,
           { method: "DELETE", headers: { Authorization: `Bearer ${token.accessToken}` } }
         );
       }
@@ -566,6 +577,34 @@ async function handleExportIcs(request) {
   });
 }
 
+// ── List Google Calendars ──
+async function handleListCalendars(request, env) {
+  const token = await getValidToken(env.DB, env);
+  if (!token) return error("Google Calendar not connected", 401);
+
+  const resp = await fetch(
+    `${GOOGLE_CALENDAR_API}/users/me/calendarList`,
+    { headers: { Authorization: `Bearer ${token.accessToken}` } }
+  );
+
+  if (!resp.ok) {
+    if (resp.status === 401) return error("Google Calendar access expired. Reconnect your calendar.", 401);
+    const errBody = await resp.text();
+    throw new Error(`Google Calendar API error ${resp.status}: ${errBody}`);
+  }
+
+  const data = await resp.json();
+  const calendars = (data.items || []).map((c) => ({
+    id: c.id,
+    summary: c.summary,
+    description: c.description,
+    primary: c.primary || false,
+    timeZone: c.timeZone,
+  }));
+
+  return json({ calendars });
+}
+
 // ── Google Calendar search ──
 async function handleCalendarSearch(request, env) {
   const url = new URL(request.url);
@@ -584,8 +623,9 @@ async function handleCalendarSearch(request, env) {
     orderBy: "startTime",
   });
 
+  const calendarId = url.searchParams.get("calendar_id") || "primary";
   const resp = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
     { headers: { Authorization: `Bearer ${token.accessToken}` } }
   );
 
@@ -649,11 +689,12 @@ async function handleApprovalAction(request, env) {
   if (action === "cancelled") {
     const session = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first();
     if (session?.google_event_id) {
+      const calId = session.calendar_id || "primary";
       try {
         const token = await getValidToken(db, env);
         if (token) {
           await fetch(
-            `${GOOGLE_CALENDAR_API}/calendars/primary/events/${session.google_event_id}`,
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${session.google_event_id}`,
             { method: "DELETE", headers: { Authorization: `Bearer ${token.accessToken}` } }
           );
         }
@@ -852,6 +893,11 @@ export default {
       // POST /api/auth/revoke — disconnect Google Calendar
       if (path === "/api/auth/revoke" && method === "POST") {
         return handleAuthRevoke(env);
+      }
+
+      // GET /api/calendars — list Google Calendars
+      if (path === "/api/calendars" && method === "GET") {
+        return handleListCalendars(request, env);
       }
 
       // GET /api/calendar/search — search Google Calendar
