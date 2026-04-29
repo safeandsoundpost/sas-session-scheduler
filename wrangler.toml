@@ -1,0 +1,11 @@
+name = "sas-scheduler"
+main = "src/index.js"
+compatibility_date = "2025-04-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sas-scheduler-db"
+database_id = "sas-scheduler-db"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }

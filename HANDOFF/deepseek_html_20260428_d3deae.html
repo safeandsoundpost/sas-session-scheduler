@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule — Safe & Sound Post</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a; --charcoal: #1a1a1a; --rule: rgba(255,255,255,0.07);
+      --rule-mid: rgba(255,255,255,0.12); --white: #f4f2ef; --off-white: #c8c5bf;
+      --grey: #6e6b66; --radius: 6px; --success: #22c55e; --warning: #f59e0b; --conflict: #dc2626;
+    }
+    body {
+      background: var(--black); color: var(--white);
+      font-family: 'Instrument Sans', sans-serif; font-weight: 300;
+      line-height: 1.7; min-height: 100vh; display: flex; flex-direction: column;
+    }
+    .bg-flourish {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 1920px; height: 1080px;
+      background-image: url('https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Lines+Flourish.png');
+      background-size: 1920px 1080px; background-repeat: no-repeat;
+      opacity: 0.18; pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 9999;
+    }
+    header, main, footer { position: relative; z-index: 1; }
+    header {
+      padding: 18px 40px; display: flex; justify-content: space-between;
+      border-bottom: 1px solid var(--rule); background: rgba(10,10,10,0.55);
+      backdrop-filter: blur(12px);
+    }
+    .header-logo { height: 44px; width: auto; object-fit: contain; }
+    .header-tag { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--off-white); }
+    .secure-badge { display: flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase; }
+    main { flex: 1; padding: 48px 32px 64px; max-width: 1600px; margin: 0 auto; width: 100%; }
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+    @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+    .card {
+      background: rgba(15,15,15,0.75); backdrop-filter: blur(8px);
+      border: 1px solid var(--rule-mid); border-radius: var(--radius); overflow: hidden;
+    }
+    .card-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--rule); background: rgba(26,26,26,0.5); font-weight: 500; display: flex; justify-content: space-between; }
+    .card-body { padding: 1.5rem; }
+    .smart-input, .batch-input {
+      width: 100%; padding: 1rem; font-family: monospace; font-size: 0.85rem;
+      background: rgba(10,10,10,0.8); border: 1px solid var(--rule-mid); border-radius: var(--radius);
+      color: var(--white); resize: vertical;
+    }
+    .smart-input { background: linear-gradient(135deg, rgba(20,20,20,0.9), rgba(26,26,26,0.9)); border-left: 2px solid var(--warning); }
+    .resource-tag {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      background: rgba(36,36,36,0.9); padding: 0.25rem 0.75rem; border-radius: 20px;
+      font-size: 0.7rem; border: 1px solid var(--rule);
+    }
+    .resource-tag.person { border-left: 2px solid #60a5fa; }
+    .resource-tag.room { border-left: 2px solid var(--warning); }
+    .session-group { background: rgba(26,26,26,0.5); border-radius: var(--radius); margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--rule); }
+    .session-header { font-weight: 600; margin-bottom: 0.75rem; display: flex; justify-content: space-between; }
+    .event-item { border: 1px solid var(--rule); border-radius: var(--radius); padding: 1rem; margin-bottom: 0.75rem; background: rgba(10,10,10,0.6); }
+    .event-item.suggested { border-left: 3px solid var(--success); }
+    .event-item.conflict { border-left: 3px solid var(--conflict); background: rgba(220,38,38,0.08); }
+    .event-title { font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+    .btn {
+      padding: 0.5rem 1rem; border-radius: var(--radius); font-weight: 500;
+      cursor: pointer; border: none; font-family: inherit; letter-spacing: 0.06em;
+    }
+    .btn-primary { background: var(--white); color: var(--black); }
+    .btn-secondary { background: rgba(36,36,36,0.9); color: var(--off-white); border: 1px solid var(--rule-mid); }
+    .btn-success { background: var(--success); color: var(--black); }
+    .btn-sm { padding: 0.25rem 0.75rem; font-size: 0.7rem; }
+    .suggestion-card { background: rgba(26,26,26,0.6); border: 1px solid var(--rule-mid); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; max-height: 400px; overflow-y: auto; }
+    .suggestion-header { font-weight: 600; color: var(--warning); margin-bottom: 0.75rem; }
+    .alternative-slot { background: rgba(10,10,10,0.8); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--rule); cursor: pointer; }
+    .alternative-slot:hover { background: rgba(36,36,36,0.9); transform: translateX(4px); }
+    .resource-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
+    .free-badge { color: var(--success); font-size: 0.7rem; }
+    .busy-badge { color: var(--conflict); font-size: 0.7rem; }
+    .project-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(26,26,26,0.7); border-radius: 40px; font-size: 12px; margin-bottom: 1rem; }
+    .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:0.8;} 50%{opacity:0.2;} }
+    .footer-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+    footer { padding: 22px 40px; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; background: rgba(10,10,10,0.5); backdrop-filter: blur(10px); }
+    footer a { font-size: 12px; color: var(--grey); text-decoration: none; }
+    @media (max-width: 580px) { header { padding: 16px 20px; } .header-tag, .secure-badge { display: none; } main { padding: 32px 16px; } footer { flex-direction: column; text-align: center; gap: 6px; } .footer-actions { flex-direction: column; } }
+  </style>
+</head>
+<body>
+<div class="bg-flourish"></div>
+<header>
+  <div class="header-left"><img class="header-logo" src="https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Banner.png" alt="Safe & Sound" /></div>
+  <div class="header-right"><span class="header-tag">Scheduler</span><div class="secure-badge">🔒 Resource-Aware</div></div>
+</header>
+<main>
+  <div class="project-pill"><span class="pulse"></span><span>Studio Scheduling · <strong>Thom + Jesse + ST1/ST2</strong></span></div>
+  <div class="card" style="margin-bottom:28px"><div class="card-header"><span>✨ Smart Scheduling Request</span><span style="font-size:0.7rem">Natural language → finds available dates</span></div>
+  <div class="card-body"><textarea id="smartRequest" class="smart-input" rows="3" placeholder='Example: "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom"'></textarea>
+  <div style="display:flex; justify-content:flex-end; margin-top:1rem; gap:0.5rem"><button class="btn btn-secondary" id="clearSmartBtn">Clear</button><button class="btn btn-primary" id="generateSuggestionsBtn">✨ Find Available Dates</button></div>
+  <div id="suggestionsArea"></div></div></div>
+  <div class="grid-2col"><div class="card"><div class="card-header"><span>📋 Batch Input</span><span style="font-size:0.7rem">Exact dates with @tags</span></div>
+  <div class="card-body"><textarea id="batchText" class="batch-input" rows="4" placeholder='SACRED SPACE mix: May 20 6:30-8:30pm @thom @studio_a'></textarea>
+  <button class="btn btn-secondary" id="parseBatchBtn" style="margin-top:1rem; width:100%">Parse Batch Events</button></div></div>
+  <div class="card"><div class="card-header"><span>👥 Resource Availability</span><span style="font-size:0.7rem">Next 30 days</span></div>
+  <div class="card-body"><div class="resource-row"><span><span class="resource-tag person">👤 Thom</span></span><span id="thomStatus">Loading...</span></div>
+  <div class="resource-row"><span><span class="resource-tag person">👤 Jesse</span></span><span id="jesseStatus">Loading...</span></div>
+  <div class="resource-row"><span><span class="resource-tag room">🎚️ Studio A (ST1)</span></span><span id="studioAStatus">Loading...</span></div>
+  <div class="resource-row"><span><span class="resource-tag room">🎛️ Studio B (ST2)</span></span><span id="studioBStatus">Loading...</span></div></div></div></div>
+  <div class="card"><div class="card-header"><span>📅 Session Queue (<span id="sessionCount">0</span> sessions)</span><span>🟢 clear ⚠️ conflict</span></div>
+  <div class="card-body" id="eventsList"><div style="text-align:center; color:var(--grey); padding:2rem">Generate suggestions or parse batch events</div></div>
+  <div class="footer-actions"><button class="btn btn-secondary" id="generateIcsBtn">📎 Export .ICS</button><button class="btn btn-success" id="pushToCalendarBtn">📤 Push to Google Calendar</button></div></div>
+</main>
+<footer><span>&copy; 2026 Safe &amp; Sound Post</span><a href="https://safeandsoundpost.com">safeandsoundpost.com</a><a href="mailto:studio@safeandsoundpost.com">studio@safeandsoundpost.com</a></footer>
+<script>
+function getExistingBookings(){return{thom:[{start:new Date(2026,4,17,14,0),end:new Date(2026,4,17,18,0)},{start:new Date(2026,4,20,18,0),end:new Date(2026,4,20,22,0)}],jesse:[{start:new Date(2026,4,17,14,0),end:new Date(2026,4,17,17,0)}],studio_a:[{start:new Date(2026,4,20,18,0),end:new Date(2026,4,20,22,0)}],studio_b:[{start:new Date(2026,4,17,14,0),end:new Date(2026,4,17,18,0)}]}}
+function checkConflict(r,s,e){let b=getExistingBookings()[r]||[];for(let bk of b)if(s<bk.end&&e>bk.start)return!0;return!1}
+function checkFullDay(r,d){let w=[[9,13,"Morning"],[13,17,"Afternoon"],[18,22,"Evening"]];for(let wh of w){let st=new Date(d);st.setHours(wh[0],0);let et=new Date(d);et.setHours(wh[1],0);let ok=!0;for(let res of r)if(checkConflict(res,st,et)){ok=!1;break}if(ok)return{available:!0,window:wh[2]}}return{available:!1}}
+function parseReq(t){let l=t.toLowerCase(),req={projectName:"",durationHours:8,numberOfSessions:1,preferredDays:"any",preferredResources:[]};let pm=t.match(/^([^,]+?)(?:\s+needs|\s+for|,)/i);req.projectName=pm?pm[1].trim():"Untitled";let sm=t.match(/(\d+)\s*(?:mixing\s*)?(?:days|sessions)/i);if(sm)req.numberOfSessions=parseInt(sm[1]);let dm=t.match(/(\d+)\s*hours?\s*each/i);if(dm)req.durationHours=parseInt(dm[1]);if(l.includes("weekends only"))req.preferredDays="weekends";if(l.includes("weekdays only"))req.preferredDays="weekdays";if(l.includes("thom"))req.preferredResources.push("thom");if(l.includes("jesse"))req.preferredResources.push("jesse");if(l.includes("studio a")||l.includes("st1"))req.preferredResources.push("studio_a");if(l.includes("studio b")||l.includes("st2"))req.preferredResources.push("studio_b");if(!req.preferredResources.length)req.preferredResources=["thom","studio_a"];return req}
+function findDates(req){let dates=[];let st=new Date(2026,4,16);let en=new Date(2026,5,15);for(let d=new Date(st);d<=en;d.setDate(d.getDate()+1)){let wk=d.getDay()===0||d.getDay()===6;if(req.preferredDays==="weekends"&&!wk)continue;if(req.preferredDays==="weekdays"&&wk)continue;let av=checkFullDay(req.preferredResources,d);if(av.available)dates.push({date:new Date(d),window:av.window,dateStr:d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})});if(dates.length>=req.numberOfSessions*3)break}return dates}
+let sessions=[],availDates=[],curReq=null;
+function renderSugg(dates,req){let area=document.getElementById("suggestionsArea");if(!dates.length){area.innerHTML='<div class="suggestion-card"><div class="suggestion-header">❌ No available dates found</div></div>';return}let html='<div class="suggestion-card"><div class="suggestion-header">📅 Found '+dates.length+" available dates</div>";let unique=[],seen=new Set;for(let d of dates)if(!seen.has(d.date.toDateString())){seen.add(d.date.toDateString());unique.push(d)}unique.slice(0,req.numberOfSessions*2).forEach((d,idx)=>{html+=`<div class="alternative-slot" data-idx="${idx}"><div><strong>${d.dateStr}</strong><br><span style="font-size:0.75rem">${d.window}</span><div style="font-size:0.7rem">${req.preferredResources.map(r=>`<span class="resource-tag">${r}: 🟢 free</span>`).join(" ")}</div></div><button class="btn btn-secondary btn-sm" onclick="selectDate(${idx})">Select</button></div>`});if(unique.length>=req.numberOfSessions)html+=`<div style="margin-top:0.75rem; text-align:center"><button class="btn btn-primary btn-sm" onclick="selectAllDates()">📦 Add All ${req.numberOfSessions} Dates</button></div>`;html+=`</div>`;area.innerHTML=html;availDates=unique;curReq=req}
+window.selectDate=function(idx){let d=availDates[idx],req=curReq;if(!d||!req)return;let st=new Date(d.date);if(d.window.includes("Morning"))st.setHours(9);else if(d.window.includes("Afternoon"))st.setHours(13);else st.setHours(18);let et=new Date(st);et.setHours(st.getHours()+req.durationHours);sessions.push({id:Date.now()+idx,project:req.projectName,sessionNumber:sessions.filter(s=>s.project===req.projectName).length+1,start:st,end:et,resources:req.preferredResources,dateStr:d.dateStr});renderSessions()};
+window.selectAllDates=function(){let req=curReq,toAdd=availDates.slice(0,req.numberOfSessions);toAdd.forEach((d,i)=>{let st=new Date(d.date);if(d.window.includes("Morning"))st.setHours(9);else if(d.window.includes("Afternoon"))st.setHours(13);else st.setHours(18);let et=new Date(st);et.setHours(st.getHours()+req.durationHours);sessions.push({id:Date.now()+i+Math.random(),project:req.projectName,sessionNumber:i+1,start:st,end:et,resources:req.preferredResources,dateStr:d.dateStr})});renderSessions();document.getElementById("suggestionsArea").innerHTML='<div class="suggestion-card">✅ Added '+toAdd.length+" session(s)</div>"};
+function renderSessions(){let cont=document.getElementById("eventsList"),cnt=document.getElementById("sessionCount");cnt.textContent=sessions.length;if(!sessions.length){cont.innerHTML='<div style="text-align:center;color:var(--grey);padding:2rem">No sessions in queue</div>';return}let html="",grouped={};for(let s of sessions){if(!grouped[s.project])grouped[s.project]=[];grouped[s.project].push(s)}for(let[proj,sess]of Object.entries(grouped)){html+=`<div class="session-group"><div class="session-header">🎬 ${proj}</div>`;for(let s of sess){let ts=`${s.start.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})} → ${s.end.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;html+=`<div class="event-item suggested"><div class="event-title"><span>Session ${s.sessionNumber}: ${s.dateStr} · ${ts}</span><button class="btn btn-secondary btn-sm" onclick="removeSession(${s.id})">Remove</button></div><div class="event-resources">${s.resources.map(r=>`<span class="resource-tag ${r.includes("studio")?"room":"person"}">@${r}</span>`).join("")}</div><div style="color:var(--success);font-size:0.75rem">✅ All resources available</div></div>`}html+=`</div>`}cont.innerHTML=html}
+window.removeSession=function(id){sessions=sessions.filter(s=>s.id!==id);renderSessions()};
+function parseBatch(){let txt=document.getElementById("batchText").value,lines=txt.split("\n");for(let line of lines){let m=line.match(/^(.+?)\s+mix:?\s*(\w+)\s+(\d+)\s+(\d+):(\d+)-(\d+):(\d+)\s+@(\w+)\s+@(\w+)/i);if(m){let[_,proj,mon,day,sh,sm,eh,em,r1,r2]=m;let st=new Date(2026,4,parseInt(day),parseInt(sh),parseInt(sm)),et=new Date(2026,4,parseInt(day),parseInt(eh),parseInt(em));sessions.push({id:Date.now()+Math.random(),project:proj.trim(),sessionNumber:1,start:st,end:et,resources:[r1,r2],dateStr:st.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})})}}renderSessions()}
+function updStatus(){document.getElementById("thomStatus").innerHTML='<span class="busy-badge">🔴 Busy May 17, 20</span>';document.getElementById("jesseStatus").innerHTML='<span class="busy-badge">🔴 Busy May 17</span>';document.getElementById("studioAStatus").innerHTML='<span class="busy-badge">🔴 Busy May 20</span>';document.getElementById("studioBStatus").innerHTML='<span class="busy-badge">🔴 Busy May 17</span>'}
+document.getElementById("generateSuggestionsBtn").onclick=()=>{let t=document.getElementById("smartRequest").value;if(!t.trim()){alert("Please describe your scheduling needs");return}let req=parseReq(t),dates=findDates(req);renderSugg(dates,req)};document.getElementById("parseBatchBtn").onclick=parseBatch;document.getElementById("clearSmartBtn").onclick=()=>{document.getElementById("smartRequest").value="";document.getElementById("suggestionsArea").innerHTML=""};document.getElementById("generateIcsBtn").onclick=()=>{if(sessions.length)alert(`📎 Export ${sessions.length} session(s) to ICS`);else alert("No sessions to export")};document.getElementById("pushToCalendarBtn").onclick=()=>{if(sessions.length)alert(`✅ Push ${sessions.length} session(s) to Google Calendar`);else alert("No sessions to push")};updStatus();document.getElementById("smartRequest").value="Happy Families, need 3 mixing days, 8 hours each, weekends only for thom";
+</script>
+</body>
+</html>

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule — Safe & Sound Post</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --black: #0a0a0a; --charcoal: #1a1a1a; --rule: rgba(255,255,255,0.07);
+      --rule-mid: rgba(255,255,255,0.12); --white: #f4f2ef; --off-white: #c8c5bf;
+      --grey: #6e6b66; --radius: 6px; --success: #22c55e; --warning: #f59e0b; --conflict: #dc2626;
+    }
+    body {
+      background: var(--black); color: var(--white);
+      font-family: 'Instrument Sans', sans-serif; font-weight: 300;
+      line-height: 1.7; min-height: 100vh; display: flex; flex-direction: column;
+    }
+    .bg-flourish {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 1920px; height: 1080px;
+      background-image: url('https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Lines+Flourish.png');
+      background-size: 1920px 1080px; background-repeat: no-repeat;
+      opacity: 0.18; pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 9999;
+    }
+    header, main, footer { position: relative; z-index: 1; }
+    header {
+      padding: 18px 40px; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--rule); background: rgba(10,10,10,0.55);
+      backdrop-filter: blur(12px);
+    }
+    .header-logo { height: 44px; width: auto; object-fit: contain; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-tag { font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--off-white); }
+    .env-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; background: rgba(245,158,11,0.2); color: var(--warning); }
+    main { flex: 1; padding: 48px 32px 64px; max-width: 1600px; margin: 0 auto; width: 100%; }
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+    @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+    .card {
+      background: rgba(15,15,15,0.75); backdrop-filter: blur(8px);
+      border: 1px solid var(--rule-mid); border-radius: var(--radius); overflow: hidden;
+    }
+    .card-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--rule); background: rgba(26,26,26,0.5); font-weight: 500; display: flex; justify-content: space-between; }
+    .card-body { padding: 1.5rem; }
+    .smart-input, .batch-input {
+      width: 100%; padding: 1rem; font-family: monospace; font-size: 0.85rem;
+      background: rgba(10,10,10,0.8); border: 1px solid var(--rule-mid); border-radius: var(--radius);
+      color: var(--white); resize: vertical;
+    }
+    .smart-input { background: linear-gradient(135deg, rgba(20,20,20,0.9), rgba(26,26,26,0.9)); border-left: 2px solid var(--warning); }
+    .resource-tag {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      background: rgba(36,36,36,0.9); padding: 0.25rem 0.75rem; border-radius: 20px;
+      font-size: 0.7rem; border: 1px solid var(--rule);
+    }
+    .resource-tag.person { border-left: 2px solid #60a5fa; }
+    .resource-tag.room { border-left: 2px solid var(--warning); }
+    .session-group { background: rgba(26,26,26,0.5); border-radius: var(--radius); margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--rule); }
+    .session-header { font-weight: 600; margin-bottom: 0.75rem; display: flex; justify-content: space-between; }
+    .event-item { border: 1px solid var(--rule); border-radius: var(--radius); padding: 1rem; margin-bottom: 0.75rem; background: rgba(10,10,10,0.6); }
+    .event-item.suggested { border-left: 3px solid var(--success); }
+    .event-item.saved { border-left: 3px solid #60a5fa; }
+    .event-item.conflict { border-left: 3px solid var(--conflict); background: rgba(220,38,38,0.08); }
+    .event-title { font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+    .event-resources { margin-bottom: 0.25rem; display: flex; gap: 0.25rem; flex-wrap: wrap; }
+    .btn {
+      padding: 0.5rem 1rem; border-radius: var(--radius); font-weight: 500;
+      cursor: pointer; border: none; font-family: inherit; letter-spacing: 0.06em;
+      transition: opacity 0.2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--white); color: var(--black); }
+    .btn-primary:hover { background: #fff; }
+    .btn-secondary { background: rgba(36,36,36,0.9); color: var(--off-white); border: 1px solid var(--rule-mid); }
+    .btn-secondary:hover { background: rgba(50,50,50,0.9); }
+    .btn-success { background: var(--success); color: var(--black); }
+    .btn-danger { background: var(--conflict); color: white; }
+    .btn-sm { padding: 0.25rem 0.75rem; font-size: 0.7rem; }
+    .suggestion-card { background: rgba(26,26,26,0.6); border: 1px solid var(--rule-mid); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; max-height: 500px; overflow-y: auto; }
+    .suggestion-header { font-weight: 600; color: var(--warning); margin-bottom: 0.75rem; }
+    .alternative-slot { background: rgba(10,10,10,0.8); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--rule); cursor: pointer; }
+    .alternative-slot:hover { background: rgba(36,36,36,0.9); transform: translateX(4px); }
+    .alternative-slot.selected { border-color: var(--success); background: rgba(34,197,94,0.08); }
+    .resource-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
+    .free-badge { color: var(--success); font-size: 0.7rem; }
+    .busy-badge { color: var(--conflict); font-size: 0.7rem; }
+    .project-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(26,26,26,0.7); border-radius: 40px; font-size: 12px; margin-bottom: 1rem; }
+    .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:0.8;} 50%{opacity:0.2;} }
+    .footer-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+    .status-bar { display: flex; gap: 1rem; font-size: 0.7rem; color: var(--grey); margin-bottom: 1rem; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+    .status-dot.ok { background: var(--success); }
+    .status-dot.err { background: var(--conflict); }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--rule-mid); border-top-color: var(--warning); border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    footer { padding: 22px 40px; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; background: rgba(10,10,10,0.5); backdrop-filter: blur(10px); }
+    footer a { font-size: 12px; color: var(--grey); text-decoration: none; }
+    @media (max-width: 580px) { header { padding: 16px 20px; } .header-tag { display: none; } main { padding: 32px 16px; } footer { flex-direction: column; text-align: center; gap: 6px; } .footer-actions { flex-direction: column; } }
+  </style>
+</head>
+<body>
+<div class="bg-flourish"></div>
+<header>
+  <div class="header-left">
+    <img class="header-logo" src="https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Banner.png" alt="Safe & Sound" />
+    <span class="env-badge" id="envBadge">LOCAL</span>
+  </div>
+  <div class="header-right"><span class="header-tag">Scheduler</span></div>
+</header>
+<main>
+  <div class="status-bar">
+    <span><span class="status-dot" id="apiDot"></span> API: <span id="apiStatus">checking...</span></span>
+    <span id="dbStatus"></span>
+  </div>
+
+  <div class="card" style="margin-bottom:28px">
+    <div class="card-header"><span>Smart Scheduling Request</span><span style="font-size:0.7rem;color:var(--grey)">Natural language → AI parses → finds available dates</span></div>
+    <div class="card-body">
+      <textarea id="smartRequest" class="smart-input" rows="3" placeholder='Example: "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom"'></textarea>
+      <div style="display:flex; justify-content:flex-end; margin-top:1rem; gap:0.5rem">
+        <button class="btn btn-secondary" id="clearSmartBtn">Clear</button>
+        <button class="btn btn-primary" id="generateSuggestionsBtn">Find Available Dates</button>
+        <span id="suggestSpinner" style="display:none"><span class="spinner"></span></span>
+      </div>
+      <div id="suggestionsArea"></div>
+    </div>
+  </div>
+
+  <div class="grid-2col">
+    <div class="card">
+      <div class="card-header"><span>Batch Input</span><span style="font-size:0.7rem">Exact dates with @tags</span></div>
+      <div class="card-body">
+        <textarea id="batchText" class="batch-input" rows="4" placeholder='SACRED SPACE mix: May 20 6:30-8:30pm @thom @studio_a'></textarea>
+        <button class="btn btn-secondary" id="parseBatchBtn" style="margin-top:1rem; width:100%">Parse Batch Events</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span>Resource Availability</span><span style="font-size:0.7rem">Next 30 days</span></div>
+      <div class="card-body" id="resourcesList">
+        <div style="text-align:center;color:var(--grey);padding:2rem">Loading resources...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span>Session Queue (<span id="sessionCount">0</span> sessions)</span>
+      <span style="font-size:0.7rem"><span style="color:var(--success)">clear</span> / <span style="color:var(--conflict)">conflict</span></span>
+    </div>
+    <div class="card-body" id="eventsList">
+      <div style="text-align:center; color:var(--grey); padding:2rem">Generate suggestions or parse batch events to see sessions here</div>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
+      <button class="btn btn-success" id="saveToDbBtn">Save to Database</button>
+    </div>
+  </div>
+</main>
+<footer>
+  <span>&copy; 2026 Safe &amp; Sound Post</span>
+  <a href="https://safeandsoundpost.com">safeandsoundpost.com</a>
+  <a href="mailto:studio@safeandsoundpost.com">studio@safeandsoundpost.com</a>
+</footer>
+
+<script>
+// ── Config ──
+const API_BASE = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+  ? "http://localhost:8787"
+  : "https://scheduler-api.safeandsoundpost.workers.dev";
+
+const IS_LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+document.getElementById("envBadge").textContent = IS_LOCAL ? "LOCAL" : "PROD";
+
+// ── State ──
+let sessions = [];
+let suggestions = [];
+let currentRequest = null;
+
+// ── API helpers ──
+async function api(path, options = {}) {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...options.headers },
+    ...options,
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: resp.statusText }));
+    throw new Error(err.error || `API error ${resp.status}`);
+  }
+  return resp;
+}
+
+async function apiJson(path, options) {
+  const resp = await api(path, options);
+  return resp.json();
+}
+
+// ── Check API health ──
+async function checkHealth() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/resources`);
+    const dot = document.getElementById("apiDot");
+    const status = document.getElementById("apiStatus");
+    if (resp.ok) {
+      dot.className = "status-dot ok";
+      status.textContent = "connected";
+      document.getElementById("dbStatus").innerHTML = '<span class="status-dot ok"></span> DB: online';
+      return true;
+    }
+    throw new Error("unhealthy");
+  } catch (e) {
+    document.getElementById("apiDot").className = "status-dot err";
+    document.getElementById("apiStatus").textContent = "offline (using local fallback)";
+    document.getElementById("dbStatus").innerHTML = '<span class="status-dot err"></span> DB: offline';
+    return false;
+  }
+}
+
+// ── Load resources ──
+async function loadResources() {
+  try {
+    const data = await apiJson("/api/resources");
+    renderResources(data.resources);
+  } catch (e) {
+    document.getElementById("resourcesList").innerHTML =
+      '<div style="text-align:center;color:var(--grey);padding:1rem">Could not load resources</div>';
+  }
+}
+
+function renderResources(resources) {
+  const container = document.getElementById("resourcesList");
+  if (!resources?.length) {
+    container.innerHTML = '<div style="text-align:center;color:var(--grey);padding:1rem">No resources configured</div>';
+    return;
+  }
+  let html = "";
+  for (const r of resources) {
+    const icon = r.type === "person" ? "" : "";
+    const tagClass = r.type === "person" ? "person" : "room";
+    const badge = r.busyPeriods?.length
+      ? `<span class="busy-badge">Busy: ${r.busyPeriods.map(p => formatDateRange(p.start, p.end)).join(", ")}</span>`
+      : '<span class="free-badge">Free</span>';
+    html += `<div class="resource-row">
+      <span><span class="resource-tag ${tagClass}">${icon} ${r.canonicalName}</span></span>
+      <span>${badge}</span>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function formatDateRange(start, end) {
+  const s = new Date(start);
+  const e = new Date(end);
+  const opts = { month: "short", day: "numeric" };
+  return `${s.toLocaleDateString("en-US", opts)} ${fmtTime(s)}`;
+}
+
+function fmtTime(d) {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Smart Scheduling ──
+document.getElementById("generateSuggestionsBtn").onclick = async function () {
+  const text = document.getElementById("smartRequest").value.trim();
+  if (!text) { alert("Please describe your scheduling needs"); return; }
+
+  const btn = this;
+  const spinner = document.getElementById("suggestSpinner");
+  btn.disabled = true;
+  spinner.style.display = "";
+
+  try {
+    // Step 1: Parse with Claude
+    const parsed = await apiJson("/api/parse", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+    currentRequest = parsed;
+
+    // Step 2: Get suggestions
+    const result = await apiJson("/api/suggest", {
+      method: "POST",
+      body: JSON.stringify(parsed),
+    });
+    suggestions = result.suggestions || [];
+    renderSuggestions(suggestions, parsed);
+  } catch (e) {
+    document.getElementById("suggestionsArea").innerHTML =
+      `<div class="suggestion-card"><div class="suggestion-header">Error</div><p>${e.message}</p><p style="font-size:0.75rem;color:var(--grey);margin-top:0.5rem">Falling back to local parser...</p></div>`;
+    // Fallback to local parsing
+    fallbackParseAndSuggest(text);
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = "none";
+  }
+};
+
+// ── Local fallback (when API is unavailable) ──
+function fallbackParseAndSuggest(text) {
+  const parsed = parseReqLocal(text);
+  currentRequest = parsed;
+  const dates = findDatesLocal(parsed);
+  suggestions = dates.map((d, i) => ({
+    date: d.date.toISOString().split("T")[0],
+    dateStr: d.dateStr,
+    startTime: d.startTime || new Date(d.date.setHours(9,0,0,0)).toISOString(),
+    endTime: d.endTime || new Date(new Date(d.date).setHours(17,0,0,0)).toISOString(),
+    window: d.window || "Morning",
+    resources: parsed.preferredResources || ["thom", "studio_a"],
+  }));
+  renderSuggestions(suggestions, parsed);
+}
+
+function parseReqLocal(t) {
+  const l = t.toLowerCase();
+  const req = { projectName: "", durationHours: 8, numberOfSessions: 1, preferredDays: "any", preferredResources: [] };
+  const pm = t.match(/^([^,]+?)(?:\s+needs|\s+for|,)/i);
+  req.projectName = pm ? pm[1].trim() : "Untitled";
+  const sm = t.match(/(\d+)\s*(?:mixing\s*)?(?:days|sessions)/i);
+  if (sm) req.numberOfSessions = parseInt(sm[1]);
+  const dm = t.match(/(\d+)\s*hours?\s*each/i);
+  if (dm) req.durationHours = parseInt(dm[1]);
+  if (l.includes("evening")) req.preferredTimeOfDay = "evening";
+  else if (l.includes("morning")) req.preferredTimeOfDay = "morning";
+  else if (l.includes("afternoon")) req.preferredTimeOfDay = "afternoon";
+  if (l.includes("weekends only")) req.preferredDays = "weekends";
+  if (l.includes("weekdays only")) req.preferredDays = "weekdays";
+  if (l.includes("thom")) req.preferredResources.push("thom");
+  if (l.includes("jesse")) req.preferredResources.push("jesse");
+  if (l.includes("studio a") || l.includes("st1")) req.preferredResources.push("studio_a");
+  if (l.includes("studio b") || l.includes("st2")) req.preferredResources.push("studio_b");
+  if (!req.preferredResources.length) req.preferredResources = ["thom", "studio_a"];
+  return req;
+}
+
+function findDatesLocal(req) {
+  const dates = [];
+  const st = new Date(2026, 4, 16);
+  const en = new Date(2026, 5, 15);
+  for (let d = new Date(st); d <= en; d.setDate(d.getDate() + 1)) {
+    const wk = d.getDay() === 0 || d.getDay() === 6;
+    if (req.preferredDays === "weekends" && !wk) continue;
+    if (req.preferredDays === "weekdays" && wk) continue;
+    const av = checkFullDayLocal(req.preferredResources, d);
+    if (av.available) {
+      dates.push({ date: new Date(d), window: av.window, dateStr: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }), startTime: new Date(d.setHours(9,0,0,0)).toISOString(), endTime: new Date(new Date(d).setHours(17,0,0,0)).toISOString() });
+    }
+    if (dates.length >= req.numberOfSessions * 3) break;
+  }
+  return dates;
+}
+
+function getExistingBookingsLocal() {
+  return {
+    thom: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }, { start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
+    jesse: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 17, 0) }],
+    studio_a: [{ start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
+    studio_b: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }],
+  };
+}
+
+function checkConflictLocal(r, s, e) {
+  const b = getExistingBookingsLocal()[r] || [];
+  for (const bk of b) if (s < bk.end && e > bk.start) return true;
+  return false;
+}
+
+function checkFullDayLocal(resources, d) {
+  const windows = [[9, 13, "Morning"], [13, 17, "Afternoon"], [18, 22, "Evening"]];
+  for (const wh of windows) {
+    const st = new Date(d); st.setHours(wh[0], 0);
+    const et = new Date(d); et.setHours(wh[1], 0);
+    let ok = true;
+    for (const res of resources) { if (checkConflictLocal(res, st, et)) { ok = false; break; } }
+    if (ok) return { available: true, window: wh[2] };
+  }
+  return { available: false };
+}
+
+// ── Render suggestions ──
+function renderSuggestions(dates, req) {
+  const area = document.getElementById("suggestionsArea");
+  if (!dates.length) {
+    area.innerHTML = '<div class="suggestion-card"><div class="suggestion-header">No available dates found in the next 30 days</div></div>';
+    return;
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const d of dates) {
+    if (!seen.has(d.date)) { seen.add(d.date); unique.push(d); }
+  }
+
+  const display = unique.slice(0, (req?.numberOfSessions || 1) * 3);
+  let html = `<div class="suggestion-card"><div class="suggestion-header">Found ${dates.length} available slots — showing ${display.length}</div>`;
+
+  display.forEach((d, idx) => {
+    const startTime = d.startTime ? new Date(d.startTime) : null;
+    const endTime = d.endTime ? new Date(d.endTime) : null;
+    const timeStr = startTime ? `${fmtTime(startTime)} → ${endTime ? fmtTime(endTime) : ""}` : d.window;
+    const isSelected = sessions.some(s => s.date === d.date && s.window === d.window);
+    html += `<div class="alternative-slot${isSelected ? " selected" : ""}" data-idx="${idx}">
+      <div>
+        <strong>${d.dateStr}</strong><br>
+        <span style="font-size:0.75rem">${timeStr} · ${d.window || ""}</span>
+        <div style="font-size:0.7rem;margin-top:0.25rem">${(d.resources || req?.preferredResources || []).map(r => {
+          const cls = r.includes("studio") ? "room" : "person";
+          return `<span class="resource-tag ${cls}">@${r}: free</span>`;
+        }).join(" ")}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="selectSuggestion(${idx})">${isSelected ? "Selected" : "Select"}</button>
+    </div>`;
+  });
+
+  if (display.length >= (req?.numberOfSessions || 1)) {
+    html += `<div style="margin-top:0.75rem; text-align:center">
+      <button class="btn btn-primary btn-sm" onclick="selectAllSuggestions()">Add All ${req?.numberOfSessions || 1} Dates</button>
+    </div>`;
+  }
+
+  html += "</div>";
+  area.innerHTML = html;
+}
+
+// ── Select suggestions ──
+window.selectSuggestion = function (idx) {
+  const d = suggestions[idx];
+  if (!d || !currentRequest) return;
+
+  const alreadyAdded = sessions.find(s => s.date === d.date && s.window === d.window);
+  if (alreadyAdded) {
+    sessions = sessions.filter(s => s !== alreadyAdded);
+  } else {
+    sessions.push({
+      id: Date.now() + idx,
+      project: currentRequest.projectName || "Untitled",
+      sessionNumber: sessions.filter(s => s.project === (currentRequest.projectName || "Untitled")).length + 1,
+      startTime: d.startTime,
+      endTime: d.endTime,
+      date: d.date,
+      dateStr: d.dateStr,
+      window: d.window,
+      resources: d.resources || currentRequest.preferredResources || [],
+    });
+  }
+  renderSessions();
+  renderSuggestions(suggestions, currentRequest);
+};
+
+window.selectAllSuggestions = function () {
+  if (!currentRequest) return;
+  const toAdd = suggestions.slice(0, currentRequest.numberOfSessions || 1);
+  toAdd.forEach((d, i) => {
+    if (!sessions.find(s => s.date === d.date && s.window === d.window)) {
+      sessions.push({
+        id: Date.now() + i + Math.random(),
+        project: currentRequest.projectName || "Untitled",
+        sessionNumber: sessions.filter(s => s.project === (currentRequest.projectName || "Untitled")).length + 1,
+        startTime: d.startTime,
+        endTime: d.endTime,
+        date: d.date,
+        dateStr: d.dateStr,
+        window: d.window,
+        resources: d.resources || currentRequest.preferredResources || [],
+      });
+    }
+  });
+  renderSessions();
+  renderSuggestions(suggestions, currentRequest);
+};
+
+// ── Render session queue ──
+function renderSessions() {
+  const cont = document.getElementById("eventsList");
+  const cnt = document.getElementById("sessionCount");
+  cnt.textContent = sessions.length;
+
+  if (!sessions.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--grey);padding:2rem">No sessions in queue. Generate suggestions or parse batch events.</div>';
+    return;
+  }
+
+  const grouped = {};
+  for (const s of sessions) {
+    if (!grouped[s.project]) grouped[s.project] = [];
+    grouped[s.project].push(s);
+  }
+
+  let html = "";
+  for (const [proj, sess] of Object.entries(grouped)) {
+    html += `<div class="session-group"><div class="session-header">${proj} <span style="font-size:0.7rem;font-weight:300;color:var(--grey)">${sess.length} session(s)</span></div>`;
+    for (const s of sess) {
+      const ts = `${fmtTime(new Date(s.startTime))} → ${fmtTime(new Date(s.endTime))}`;
+      const statusClass = s.saved ? "saved" : "suggested";
+      const statusLabel = s.saved ? " Saved" : " Ready";
+      html += `<div class="event-item ${statusClass}">
+        <div class="event-title">
+          <span>Session ${s.sessionNumber}: ${s.dateStr} · ${ts}</span>
+          <button class="btn btn-secondary btn-sm" onclick="removeSession(${s.id})">Remove</button>
+        </div>
+        <div class="event-resources">${(s.resources || []).map(r => {
+          const cls = r.includes("studio") ? "room" : "person";
+          return `<span class="resource-tag ${cls}">@${r}</span>`;
+        }).join("")}</div>
+        <div style="color:var(--success);font-size:0.75rem">${statusLabel}</div>
+      </div>`;
+    }
+    html += "</div>";
+  }
+  cont.innerHTML = html;
+}
+
+window.removeSession = function (id) {
+  sessions = sessions.filter(s => s.id !== id);
+  renderSessions();
+  if (suggestions.length) renderSuggestions(suggestions, currentRequest);
+};
+
+// ── Batch parsing ──
+document.getElementById("parseBatchBtn").onclick = function () {
+  const txt = document.getElementById("batchText").value;
+  if (!txt.trim()) return;
+  const lines = txt.split("\n");
+  for (const line of lines) {
+    const m = line.match(/^(.+?)\s+mix:?\s*(\w+)\s+(\d+)\s+(\d+):(\d+)-(\d+):(\d+)\s+@(\w+)\s+@(\w+)/i);
+    if (m) {
+      const [_, proj, mon, day, sh, sm, eh, em, r1, r2] = m;
+      const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+      const monIdx = months[mon.toLowerCase().slice(0, 3)] ?? 4;
+      const st = new Date(2026, monIdx, parseInt(day), parseInt(sh), parseInt(sm));
+      const et = new Date(2026, monIdx, parseInt(day), parseInt(eh), parseInt(em));
+      sessions.push({
+        id: Date.now() + Math.random(),
+        project: proj.trim(),
+        sessionNumber: 1,
+        startTime: st.toISOString(),
+        endTime: et.toISOString(),
+        date: st.toISOString().split("T")[0],
+        dateStr: st.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+        resources: [r1, r2],
+      });
+    }
+  }
+  renderSessions();
+};
+
+// ── Save to DB ──
+document.getElementById("saveToDbBtn").onclick = async function () {
+  if (!sessions.length) { alert("No sessions to save"); return; }
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    const grouped = {};
+    for (const s of sessions) grouped[s.project] = grouped[s.project] || [];
+    for (const s of sessions) {
+      if (!grouped[s.project]) grouped[s.project] = [];
+      grouped[s.project].push(s);
+    }
+
+    for (const [projectName, sess] of Object.entries(grouped)) {
+      await apiJson("/api/sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          projectName,
+          sessions: sess.map((s, i) => ({
+            startTime: s.startTime,
+            endTime: s.endTime,
+            sessionNumber: i + 1,
+            person: s.resources?.[0] || null,
+            room: s.resources?.[1] || null,
+          })),
+        }),
+      });
+      for (const s of sess) s.saved = true;
+    }
+    renderSessions();
+    btn.textContent = "Saved!";
+    setTimeout(() => { btn.textContent = "Save to Database"; btn.disabled = false; }, 2000);
+  } catch (e) {
+    alert(`Save failed: ${e.message}`);
+    btn.textContent = "Save to Database";
+    btn.disabled = false;
+  }
+};
+
+// ── Export ICS ──
+document.getElementById("generateIcsBtn").onclick = async function () {
+  if (!sessions.length) { alert("No sessions to export"); return; }
+
+  const icsSessions = sessions.map(s => ({
+    projectName: s.project,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    resources: s.resources || [],
+  }));
+
+  try {
+    const resp = await api("/api/export-ics", {
+      method: "POST",
+      body: JSON.stringify({ sessions: icsSessions }),
+    });
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "schedule.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    // Fallback: generate ICS locally
+    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SafeAndSound//Scheduler//EN\r\n";
+    for (const s of icsSessions) {
+      const fmtStart = s.startTime.replace(/[-:]/g, "").split(".")[0] + "Z";
+      const fmtEnd = s.endTime.replace(/[-:]/g, "").split(".")[0] + "Z";
+      ics += `BEGIN:VEVENT\r\nSUMMARY:${s.projectName} - Mix Session\r\nDTSTART:${fmtStart}\r\nDTEND:${fmtEnd}\r\nUID:${crypto.randomUUID()}\r\nEND:VEVENT\r\n`;
+    }
+    ics += "END:VCALENDAR";
+    const blob = new Blob([ics], { type: "text/calendar" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "schedule.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+};
+
+// ── Clear ──
+document.getElementById("clearSmartBtn").onclick = function () {
+  document.getElementById("smartRequest").value = "";
+  document.getElementById("suggestionsArea").innerHTML = "";
+  suggestions = [];
+  currentRequest = null;
+};
+
+// ── Init ──
+async function init() {
+  const healthy = await checkHealth();
+  if (healthy) {
+    await loadResources();
+  } else {
+    // Use mock resource data
+    document.getElementById("resourcesList").innerHTML = `
+      <div class="resource-row"><span><span class="resource-tag person">Thom</span></span><span class="busy-badge">Busy May 17, 20</span></div>
+      <div class="resource-row"><span><span class="resource-tag person">Jesse</span></span><span class="busy-badge">Busy May 17</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">Studio A (ST1)</span></span><span class="busy-badge">Busy May 20</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">Studio B (ST2)</span></span><span class="busy-badge">Busy May 17</span></div>
+    `;
+  }
+  document.getElementById("smartRequest").value = "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom";
+}
+
+init();
+</script>
+</body>
+</html>
