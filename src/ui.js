@@ -179,7 +179,7 @@ export default `<!DOCTYPE html>
       </div>
       <div class="footer-actions-right">
         <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
-        <button class="btn btn-success" id="saveToDbBtn">Save to Database</button>
+        <button class="btn btn-success" id="saveToDbBtn">Push to Google Calendar</button>
       </div>
     </div>
   </div>
@@ -248,7 +248,6 @@ let googleConnected = false;
 
 // Listen for OAuth callback from popup
 window.addEventListener("message", (event) => {
-  if (event.origin !== location.origin) return;
   if (event.data === "google-auth-success") {
     googleConnected = true;
     updateGoogleUI();
@@ -306,15 +305,7 @@ async function connectGoogle() {
       const popup = window.open(data.url, "google-oauth", "width=600,height=700");
       if (!popup) {
         alert("Please allow popups for this site to connect Google Calendar.");
-        return;
       }
-      // Poll for connection after popup closes
-      const poll = setInterval(async () => {
-        if (popup.closed) {
-          clearInterval(poll);
-          await checkGoogleStatus();
-        }
-      }, 500);
     } else {
       alert("Google OAuth is not configured yet. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets.");
     }
@@ -825,7 +816,7 @@ document.getElementById("saveToDbBtn").onclick = async function () {
   if (!sessions.length) { alert("No sessions to save"); return; }
   const btn = this;
   btn.disabled = true;
-  btn.textContent = "Saving...";
+  btn.textContent = "Pushing...";
 
   try {
     const grouped = {};
@@ -861,11 +852,11 @@ document.getElementById("saveToDbBtn").onclick = async function () {
     // Remove local-only sessions that were just saved (they're now from DB)
     sessions = sessions.filter(s => s.fromDb || s.saved);
     renderSessions();
-    btn.textContent = "Saved!";
-    setTimeout(() => { btn.textContent = "Save to Database"; btn.disabled = false; }, 2000);
+    btn.textContent = "Pushed!";
+    setTimeout(() => { btn.textContent = "Push to Google Calendar"; btn.disabled = false; }, 2000);
   } catch (e) {
     alert(\`Save failed: \${e.message}\`);
-    btn.textContent = "Save to Database";
+    btn.textContent = "Push to Google Calendar";
     btn.disabled = false;
   }
 };
@@ -938,7 +929,6 @@ async function init() {
       <div class="resource-row"><span><span class="resource-tag room">TCHB (17 Central Hospital Ln)</span></span><span class="free-badge">Free</span></div>
     \`;
   }
-  document.getElementById("smartRequest").value = "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom";
 }
 
 init();

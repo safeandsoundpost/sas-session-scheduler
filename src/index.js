@@ -6,7 +6,7 @@ const MODEL = "deepseek-chat";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const GOOGLE_SCOPES = "openid https://www.googleapis.com/auth/calendar.events";
+const GOOGLE_SCOPES = "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 const REDIRECT_URI = "https://sched.safeandsoundpost.com/api/auth/google/callback";
 
 function cors(request, headers = {}) {
@@ -579,74 +579,82 @@ async function handleExportIcs(request) {
 
 // ── List Google Calendars ──
 async function handleListCalendars(request, env) {
-  const token = await getValidToken(env.DB, env);
-  if (!token) return error("Google Calendar not connected", 401);
+  try {
+    const token = await getValidToken(env.DB, env);
+    if (!token) return error("Google Calendar not connected", 401);
 
-  const resp = await fetch(
-    `${GOOGLE_CALENDAR_API}/users/me/calendarList`,
-    { headers: { Authorization: `Bearer ${token.accessToken}` } }
-  );
+    const resp = await fetch(
+      `${GOOGLE_CALENDAR_API}/users/me/calendarList`,
+      { headers: { Authorization: `Bearer ${token.accessToken}` } }
+    );
 
-  if (!resp.ok) {
-    if (resp.status === 401) return error("Google Calendar access expired. Reconnect your calendar.", 401);
-    const errBody = await resp.text();
-    throw new Error(`Google Calendar API error ${resp.status}: ${errBody}`);
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      return error(`Calendar list failed (${resp.status}): ${errBody}`, resp.status);
+    }
+
+    const data = await resp.json();
+    const calendars = (data.items || []).map((c) => ({
+      id: c.id,
+      summary: c.summary,
+      description: c.description,
+      primary: c.primary || false,
+      timeZone: c.timeZone,
+    }));
+
+    return json({ calendars });
+  } catch (e) {
+    console.error("handleListCalendars error:", e.message);
+    return error(e.message, 500);
   }
-
-  const data = await resp.json();
-  const calendars = (data.items || []).map((c) => ({
-    id: c.id,
-    summary: c.summary,
-    description: c.description,
-    primary: c.primary || false,
-    timeZone: c.timeZone,
-  }));
-
-  return json({ calendars });
 }
 
 // ── Google Calendar search ──
 async function handleCalendarSearch(request, env) {
-  const url = new URL(request.url);
-  const start = url.searchParams.get("start");
-  const end = url.searchParams.get("end");
+  try {
+    const url = new URL(request.url);
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
 
-  if (!start || !end) return error("start and end query parameters required (ISO 8601)");
+    if (!start || !end) return error("start and end query parameters required (ISO 8601)");
 
-  const token = await getValidToken(env.DB, env);
-  if (!token) return error("Google Calendar not connected", 401);
+    const token = await getValidToken(env.DB, env);
+    if (!token) return error("Google Calendar not connected", 401);
 
-  const params = new URLSearchParams({
-    timeMin: new Date(start).toISOString(),
-    timeMax: new Date(end).toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime",
-  });
+    const params = new URLSearchParams({
+      timeMin: new Date(start).toISOString(),
+      timeMax: new Date(end).toISOString(),
+      singleEvents: "true",
+      orderBy: "startTime",
+    });
 
-  const calendarId = url.searchParams.get("calendar_id") || "primary";
-  const resp = await fetch(
-    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
-    { headers: { Authorization: `Bearer ${token.accessToken}` } }
-  );
+    const calendarId = url.searchParams.get("calendar_id") || "primary";
+    const resp = await fetch(
+      `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${token.accessToken}` } }
+    );
 
-  if (!resp.ok) {
-    if (resp.status === 401) return error("Google Calendar access expired. Reconnect your calendar.", 401);
-    const errBody = await resp.text();
-    throw new Error(`Google Calendar API error ${resp.status}: ${errBody}`);
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      return error(`Calendar search failed (${resp.status}): ${errBody}`, resp.status);
+    }
+
+    const data = await resp.json();
+    const events = (data.items || []).map((e) => ({
+      id: e.id,
+      summary: e.summary,
+      description: e.description,
+      start: e.start?.dateTime || e.start?.date,
+      end: e.end?.dateTime || e.end?.date,
+      creator: e.creator?.email,
+      htmlLink: e.htmlLink,
+    }));
+
+    return json({ events, count: events.length });
+  } catch (e) {
+    console.error("handleCalendarSearch error:", e.message);
+    return error(e.message, 500);
   }
-
-  const data = await resp.json();
-  const events = (data.items || []).map((e) => ({
-    id: e.id,
-    summary: e.summary,
-    description: e.description,
-    start: e.start?.dateTime || e.start?.date,
-    end: e.end?.dateTime || e.end?.date,
-    creator: e.creator?.email,
-    htmlLink: e.htmlLink,
-  }));
-
-  return json({ events, count: events.length });
 }
 
 // ── Booking approval ──
@@ -784,7 +792,7 @@ async function handleAuthCallback(request, env) {
     );
 
     return new Response(
-      `<html><body style="background:#0a0a0a;color:#22c55e;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h1>Connected!</h1><p>Google Calendar linked as ${email}</p><p style="color:#6e6b66">This window will close in a moment...</p></div><script>setTimeout(() => window.close(), 1500);</script></body></html>`,
+      `<html><body style="background:#0a0a0a;color:#22c55e;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h1>Connected!</h1><p>Google Calendar linked as ${email}</p><p style="color:#6e6b66">This window will close automatically.</p></div><script>if(window.opener){window.opener.postMessage("google-auth-success","*")}setTimeout(()=>window.close(),1500)</script></body></html>`,
       { headers: { "Content-Type": "text/html" } }
     );
   } catch (e) {
