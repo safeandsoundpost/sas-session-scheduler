@@ -1,6 +1,6 @@
-const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
+const DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions";
 const CORS_ORIGIN = "https://sched.safeandsoundpost.com";
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "deepseek-chat";
 
 function cors(request, headers = {}) {
   const origin = request?.headers?.get("Origin") || "";
@@ -48,30 +48,41 @@ async function isResourceBusy(db, resource, start, end, excludeSessionId = null)
   return row.count > 0;
 }
 
-// ── Call Claude API for structured extraction ──
-async function callClaude(apiKey, systemPrompt, userMessage, tools) {
+// ── Call DeepSeek API for structured extraction ──
+async function callDeepSeek(apiKey, systemPrompt, userMessage, tools) {
+  // Convert Anthropic-style tools to OpenAI format
+  const openaiTools = tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
+
   const body = {
     model: MODEL,
     max_tokens: 1024,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
-    tools,
-    tool_choice: { type: "any" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    tools: openaiTools,
+    tool_choice: "required",
   };
 
-  const resp = await fetch(ANTHROPIC_API, {
+  const resp = await fetch(DEEPSEEK_API, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
   });
 
   if (!resp.ok) {
     const errBody = await resp.text();
-    throw new Error(`Claude API error ${resp.status}: ${errBody}`);
+    throw new Error(`DeepSeek API error ${resp.status}: ${errBody}`);
   }
 
   return resp.json();
@@ -105,17 +116,18 @@ async function handleParse(request, env) {
   ];
 
   try {
-    const result = await callClaude(
-      env.CLAUDE_API_KEY,
+    const result = await callDeepSeek(
+      env.DEEPSEEK_API_KEY,
       "You extract structured scheduling requests from natural language. Map people names to short forms: thom, jesse, alex. Map rooms: Studio 1 = st1 or studio_a, Studio 2 = st2 or studio_b, Studio 3 = st3. If time of day isn't specified, default to 'any'. If days aren't specified, default to 'any'. Return only the structured data.",
       text,
       tools
     );
 
-    const toolUse = result.content?.find((c) => c.type === "tool_use");
-    if (!toolUse) return error("Failed to parse request");
+    const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall) return error("Failed to parse request");
 
-    return json(toolUse.input);
+    const parsed = JSON.parse(toolCall.function.arguments);
+    return json(parsed);
   } catch (e) {
     return error(e.message, 500);
   }
@@ -362,7 +374,7 @@ export default {
     }
 
     try {
-      // POST /api/parse — Claude-powered natural language extraction
+      // POST /api/parse — AI-powered natural language extraction
       if (path === "/api/parse" && method === "POST") {
         return handleParse(request, env);
       }
