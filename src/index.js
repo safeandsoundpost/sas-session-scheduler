@@ -1,3 +1,5 @@
+import HTML from "./ui.js";
+
 const DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions";
 const CORS_ORIGIN = "https://sched.safeandsoundpost.com";
 const MODEL = "deepseek-chat";
@@ -9,11 +11,18 @@ const REDIRECT_URI = "https://sas-scheduler.safeandsoundpost.workers.dev/api/aut
 
 function cors(request, headers = {}) {
   const origin = request?.headers?.get("Origin") || "";
-  const allowed = origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")
+  // Allow localhost, the custom domain, and the workers.dev domain
+  const allowedOrigins = [
+    "http://localhost",
+    "http://127.0.0.1",
+    CORS_ORIGIN,
+    "https://sas-scheduler.safeandsoundpost.workers.dev",
+  ];
+  const allowed = allowedOrigins.some((o) => origin.startsWith(o))
     ? origin
     : CORS_ORIGIN;
   return {
-    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Origin": allowed || "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     ...headers,
@@ -672,6 +681,13 @@ export default {
       // POST /api/auth/revoke — disconnect Google Calendar
       if (path === "/api/auth/revoke" && method === "POST") {
         return handleAuthRevoke(env);
+      }
+
+      // GET / — serve the scheduler UI
+      if (path === "/" && method === "GET") {
+        return new Response(HTML, {
+          headers: { "Content-Type": "text/html; charset=utf-8", ...cors(request) },
+        });
       }
 
       return new Response("Not found", { status: 404, headers: cors(request) });

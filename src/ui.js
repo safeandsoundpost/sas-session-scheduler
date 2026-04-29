@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+export default `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -193,13 +193,13 @@ let currentRequest = null;
 
 // ── API helpers ──
 async function api(path, options = {}) {
-  const resp = await fetch(`${API_BASE}${path}`, {
+  const resp = await fetch(\`\${API_BASE}\${path}\`, {
     headers: { "Content-Type": "application/json", ...options.headers },
     ...options,
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: resp.statusText }));
-    throw new Error(err.error || `API error ${resp.status}`);
+    throw new Error(err.error || \`API error \${resp.status}\`);
   }
   return resp;
 }
@@ -212,7 +212,7 @@ async function apiJson(path, options) {
 // ── Check API health ──
 async function checkHealth() {
   try {
-    const resp = await fetch(`${API_BASE}/api/resources`);
+    const resp = await fetch(\`\${API_BASE}/api/resources\`);
     const dot = document.getElementById("apiDot");
     const status = document.getElementById("apiStatus");
     if (resp.ok) {
@@ -328,12 +328,12 @@ function renderResources(resources) {
     const icon = r.type === "person" ? "" : "";
     const tagClass = r.type === "person" ? "person" : "room";
     const badge = r.busyPeriods?.length
-      ? `<span class="busy-badge">Busy: ${r.busyPeriods.map(p => formatDateRange(p.start, p.end)).join(", ")}</span>`
+      ? \`<span class="busy-badge">Busy: \${r.busyPeriods.map(p => formatDateRange(p.start, p.end)).join(", ")}</span>\`
       : '<span class="free-badge">Free</span>';
-    html += `<div class="resource-row">
-      <span><span class="resource-tag ${tagClass}">${icon} ${r.canonicalName}</span></span>
-      <span>${badge}</span>
-    </div>`;
+    html += \`<div class="resource-row">
+      <span><span class="resource-tag \${tagClass}">\${icon} \${r.canonicalName}</span></span>
+      <span>\${badge}</span>
+    </div>\`;
   }
   container.innerHTML = html;
 }
@@ -342,7 +342,7 @@ function formatDateRange(start, end) {
   const s = new Date(start);
   const e = new Date(end);
   const opts = { month: "short", day: "numeric" };
-  return `${s.toLocaleDateString("en-US", opts)} ${fmtTime(s)}`;
+  return \`\${s.toLocaleDateString("en-US", opts)} \${fmtTime(s)}\`;
 }
 
 function fmtTime(d) {
@@ -376,7 +376,7 @@ document.getElementById("generateSuggestionsBtn").onclick = async function () {
     renderSuggestions(suggestions, parsed);
   } catch (e) {
     document.getElementById("suggestionsArea").innerHTML =
-      `<div class="suggestion-card"><div class="suggestion-header">Error</div><p>${e.message}</p><p style="font-size:0.75rem;color:var(--grey);margin-top:0.5rem">Falling back to local parser...</p></div>`;
+      \`<div class="suggestion-card"><div class="suggestion-header">Error</div><p>\${e.message}</p><p style="font-size:0.75rem;color:var(--grey);margin-top:0.5rem">Falling back to local parser...</p></div>\`;
     // Fallback to local parsing
     fallbackParseAndSuggest(text);
   } finally {
@@ -404,11 +404,11 @@ function fallbackParseAndSuggest(text) {
 function parseReqLocal(t) {
   const l = t.toLowerCase();
   const req = { projectName: "", durationHours: 8, numberOfSessions: 1, preferredDays: "any", preferredResources: [] };
-  const pm = t.match(/^([^,]+?)(?:\s+needs|\s+for|,)/i);
+  const pm = t.match(/^([^,]+?)(?:\\s+needs|\\s+for|,)/i);
   req.projectName = pm ? pm[1].trim() : "Untitled";
-  const sm = t.match(/(\d+)\s*(?:mixing\s*)?(?:days|sessions)/i);
+  const sm = t.match(/(\\d+)\\s*(?:mixing\\s*)?(?:days|sessions)/i);
   if (sm) req.numberOfSessions = parseInt(sm[1]);
-  const dm = t.match(/(\d+)\s*hours?\s*each/i);
+  const dm = t.match(/(\\d+)\\s*hours?\\s*each/i);
   if (dm) req.durationHours = parseInt(dm[1]);
   if (l.includes("evening")) req.preferredTimeOfDay = "evening";
   else if (l.includes("morning")) req.preferredTimeOfDay = "morning";
@@ -482,30 +482,30 @@ function renderSuggestions(dates, req) {
   }
 
   const display = unique.slice(0, (req?.numberOfSessions || 1) * 3);
-  let html = `<div class="suggestion-card"><div class="suggestion-header">Found ${dates.length} available slots — showing ${display.length}</div>`;
+  let html = \`<div class="suggestion-card"><div class="suggestion-header">Found \${dates.length} available slots — showing \${display.length}</div>\`;
 
   display.forEach((d, idx) => {
     const startTime = d.startTime ? new Date(d.startTime) : null;
     const endTime = d.endTime ? new Date(d.endTime) : null;
-    const timeStr = startTime ? `${fmtTime(startTime)} → ${endTime ? fmtTime(endTime) : ""}` : d.window;
+    const timeStr = startTime ? \`\${fmtTime(startTime)} → \${endTime ? fmtTime(endTime) : ""}\` : d.window;
     const isSelected = sessions.some(s => s.date === d.date && s.window === d.window);
-    html += `<div class="alternative-slot${isSelected ? " selected" : ""}" data-idx="${idx}">
+    html += \`<div class="alternative-slot\${isSelected ? " selected" : ""}" data-idx="\${idx}">
       <div>
-        <strong>${d.dateStr}</strong><br>
-        <span style="font-size:0.75rem">${timeStr} · ${d.window || ""}</span>
-        <div style="font-size:0.7rem;margin-top:0.25rem">${(d.resources || req?.preferredResources || []).map(r => {
+        <strong>\${d.dateStr}</strong><br>
+        <span style="font-size:0.75rem">\${timeStr} · \${d.window || ""}</span>
+        <div style="font-size:0.7rem;margin-top:0.25rem">\${(d.resources || req?.preferredResources || []).map(r => {
           const cls = r.includes("studio") ? "room" : "person";
-          return `<span class="resource-tag ${cls}">@${r}: free</span>`;
+          return \`<span class="resource-tag \${cls}">@\${r}: free</span>\`;
         }).join(" ")}</div>
       </div>
-      <button class="btn btn-secondary btn-sm" onclick="selectSuggestion(${idx})">${isSelected ? "Selected" : "Select"}</button>
-    </div>`;
+      <button class="btn btn-secondary btn-sm" onclick="selectSuggestion(\${idx})">\${isSelected ? "Selected" : "Select"}</button>
+    </div>\`;
   });
 
   if (display.length >= (req?.numberOfSessions || 1)) {
-    html += `<div style="margin-top:0.75rem; text-align:center">
-      <button class="btn btn-primary btn-sm" onclick="selectAllSuggestions()">Add All ${req?.numberOfSessions || 1} Dates</button>
-    </div>`;
+    html += \`<div style="margin-top:0.75rem; text-align:center">
+      <button class="btn btn-primary btn-sm" onclick="selectAllSuggestions()">Add All \${req?.numberOfSessions || 1} Dates</button>
+    </div>\`;
   }
 
   html += "</div>";
@@ -578,22 +578,22 @@ function renderSessions() {
 
   let html = "";
   for (const [proj, sess] of Object.entries(grouped)) {
-    html += `<div class="session-group"><div class="session-header">${proj} <span style="font-size:0.7rem;font-weight:300;color:var(--grey)">${sess.length} session(s)</span></div>`;
+    html += \`<div class="session-group"><div class="session-header">\${proj} <span style="font-size:0.7rem;font-weight:300;color:var(--grey)">\${sess.length} session(s)</span></div>\`;
     for (const s of sess) {
-      const ts = `${fmtTime(new Date(s.startTime))} → ${fmtTime(new Date(s.endTime))}`;
+      const ts = \`\${fmtTime(new Date(s.startTime))} → \${fmtTime(new Date(s.endTime))}\`;
       const statusClass = s.saved ? "saved" : "suggested";
       const statusLabel = s.saved ? " Saved" : " Ready";
-      html += `<div class="event-item ${statusClass}">
+      html += \`<div class="event-item \${statusClass}">
         <div class="event-title">
-          <span>Session ${s.sessionNumber}: ${s.dateStr} · ${ts}</span>
-          <button class="btn btn-secondary btn-sm" onclick="removeSession(${s.id})">Remove</button>
+          <span>Session \${s.sessionNumber}: \${s.dateStr} · \${ts}</span>
+          <button class="btn btn-secondary btn-sm" onclick="removeSession(\${s.id})">Remove</button>
         </div>
-        <div class="event-resources">${(s.resources || []).map(r => {
+        <div class="event-resources">\${(s.resources || []).map(r => {
           const cls = r.includes("studio") ? "room" : "person";
-          return `<span class="resource-tag ${cls}">@${r}</span>`;
+          return \`<span class="resource-tag \${cls}">@\${r}</span>\`;
         }).join("")}</div>
-        <div style="color:var(--success);font-size:0.75rem">${statusLabel}</div>
-      </div>`;
+        <div style="color:var(--success);font-size:0.75rem">\${statusLabel}</div>
+      </div>\`;
     }
     html += "</div>";
   }
@@ -610,9 +610,9 @@ window.removeSession = function (id) {
 document.getElementById("parseBatchBtn").onclick = function () {
   const txt = document.getElementById("batchText").value;
   if (!txt.trim()) return;
-  const lines = txt.split("\n");
+  const lines = txt.split("\\n");
   for (const line of lines) {
-    const m = line.match(/^(.+?)\s+mix:?\s*(\w+)\s+(\d+)\s+(\d+):(\d+)-(\d+):(\d+)\s+@(\w+)\s+@(\w+)/i);
+    const m = line.match(/^(.+?)\\s+mix:?\\s*(\\w+)\\s+(\\d+)\\s+(\\d+):(\\d+)-(\\d+):(\\d+)\\s+@(\\w+)\\s+@(\\w+)/i);
     if (m) {
       const [_, proj, mon, day, sh, sm, eh, em, r1, r2] = m;
       const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
@@ -666,14 +666,14 @@ document.getElementById("saveToDbBtn").onclick = async function () {
       });
       for (const s of sess) s.saved = true;
       if (resp.googleCalendarSynced) {
-        console.log(`Synced ${resp.googleEventIds?.length || 0} events to Google Calendar`);
+        console.log(\`Synced \${resp.googleEventIds?.length || 0} events to Google Calendar\`);
       }
     }
     renderSessions();
     btn.textContent = "Saved!";
     setTimeout(() => { btn.textContent = "Save to Database"; btn.disabled = false; }, 2000);
   } catch (e) {
-    alert(`Save failed: ${e.message}`);
+    alert(\`Save failed: \${e.message}\`);
     btn.textContent = "Save to Database";
     btn.disabled = false;
   }
@@ -704,11 +704,11 @@ document.getElementById("generateIcsBtn").onclick = async function () {
     URL.revokeObjectURL(url);
   } catch (e) {
     // Fallback: generate ICS locally
-    let ics = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SafeAndSound//Scheduler//EN\r\n";
+    let ics = "BEGIN:VCALENDAR\\r\\nVERSION:2.0\\r\\nPRODID:-//SafeAndSound//Scheduler//EN\\r\\n";
     for (const s of icsSessions) {
       const fmtStart = s.startTime.replace(/[-:]/g, "").split(".")[0] + "Z";
       const fmtEnd = s.endTime.replace(/[-:]/g, "").split(".")[0] + "Z";
-      ics += `BEGIN:VEVENT\r\nSUMMARY:${s.projectName} - Mix Session\r\nDTSTART:${fmtStart}\r\nDTEND:${fmtEnd}\r\nUID:${crypto.randomUUID()}\r\nEND:VEVENT\r\n`;
+      ics += \`BEGIN:VEVENT\\r\\nSUMMARY:\${s.projectName} - Mix Session\\r\\nDTSTART:\${fmtStart}\\r\\nDTEND:\${fmtEnd}\\r\\nUID:\${crypto.randomUUID()}\\r\\nEND:VEVENT\\r\\n\`;
     }
     ics += "END:VCALENDAR";
     const blob = new Blob([ics], { type: "text/calendar" });
@@ -738,12 +738,12 @@ async function init() {
     await checkGoogleStatus();
   } else {
     // Use mock resource data
-    document.getElementById("resourcesList").innerHTML = `
+    document.getElementById("resourcesList").innerHTML = \`
       <div class="resource-row"><span><span class="resource-tag person">Thom</span></span><span class="busy-badge">Busy May 17, 20</span></div>
       <div class="resource-row"><span><span class="resource-tag person">Jesse</span></span><span class="busy-badge">Busy May 17</span></div>
       <div class="resource-row"><span><span class="resource-tag room">Studio A (ST1)</span></span><span class="busy-badge">Busy May 20</span></div>
       <div class="resource-row"><span><span class="resource-tag room">Studio B (ST2)</span></span><span class="busy-badge">Busy May 17</span></div>
-    `;
+    \`;
   }
   document.getElementById("smartRequest").value = "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom";
 }
@@ -752,3 +752,4 @@ init();
 </script>
 </body>
 </html>
+`;

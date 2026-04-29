@@ -1,11 +1,16 @@
 name = "sas-scheduler"
 main = "src/index.js"
 compatibility_date = "2025-04-01"
+workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
 database_name = "sas-scheduler-db"
 database_id = "2ef48317-9feb-4810-9314-f1ea604bab2d"
+
+[[routes]]
+pattern = "sched.safeandsoundpost.com/*"
+zone_id = "a9f37b2b53bfb914941c4303c18738b9"
 
 [env.production]
 vars = { ENVIRONMENT = "production" }
