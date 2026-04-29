@@ -6,7 +6,7 @@ const MODEL = "deepseek-chat";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events";
+const GOOGLE_SCOPES = "openid https://www.googleapis.com/auth/calendar.events";
 const REDIRECT_URI = "https://sched.safeandsoundpost.com/api/auth/google/callback";
 
 function cors(request, headers = {}) {
@@ -75,12 +75,12 @@ async function getStoredToken(db) {
 }
 
 async function storeToken(db, email, accessToken, refreshToken, expiresIn) {
-  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + (expiresIn || 3600) * 1000).toISOString();
   await db
     .prepare(
       "INSERT OR REPLACE INTO oauth_tokens (user_email, access_token, refresh_token, expires_at) VALUES (?, ?, ?, ?)"
     )
-    .bind(email, accessToken, refreshToken, expiresAt)
+    .bind(email, accessToken, refreshToken || null, expiresAt)
     .run();
 }
 
@@ -111,7 +111,8 @@ async function getValidToken(db, env) {
     return { accessToken: row.access_token, email: row.user_email };
   }
 
-  // Refresh
+  // Refresh (need a refresh token to refresh)
+  if (!row.refresh_token) return null;
   const data = await refreshAccessToken(
     env.GOOGLE_CLIENT_ID,
     env.GOOGLE_CLIENT_SECRET,
@@ -230,7 +231,7 @@ async function handleParse(request, env) {
   try {
     const result = await callDeepSeek(
       env.DEEPSEEK_API_KEY,
-      "You extract structured scheduling requests from natural language. Map people names to short forms: thom, jesse, alex. Map rooms: Studio 1 = st1 or studio_a, Studio 2 = st2 or studio_b, Studio 3 = st3. If time of day isn't specified, default to 'any'. If days aren't specified, default to 'any'. Return only the structured data.",
+      "You extract structured scheduling requests from natural language. Map people names to short forms: thom, jesse, alex. Map rooms: ST1 (150 John St) = st1 (also studio_a), ST2 (150 John St) = st2 (also studio_b), TCHA at 17 Central Hospital Lane = tcha (also studio_a_tch), TCHB at 17 Central Hospital Lane = tchb (also studio_b_tch). TCHA and TCHB are Difuze Studios managed by Alex Reinprecht requiring booking approval. All studio bookings require approval. If time of day isn't specified, default to 'any'. If days aren't specified, default to 'any'. Return only the structured data.",
       text,
       tools
     );
@@ -383,9 +384,11 @@ async function handleSaveSessions(request, env) {
       }
     }
 
+    const status = isStudioRoom(room) ? "pending_approval" : "suggested";
+
     const result = await db
       .prepare(
-        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status, google_event_id) VALUES (?, ?, ?, ?, ?, ?, 'suggested', ?)"
+        "INSERT INTO sessions (project_id, session_number, start_time, end_time, resource_person, resource_room, status, google_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       )
       .bind(
         project.id,
@@ -394,6 +397,7 @@ async function handleSaveSessions(request, env) {
         s.endTime,
         person,
         room,
+        status,
         googleEventId
       )
       .run();
@@ -413,34 +417,85 @@ async function handleSaveSessions(request, env) {
 async function handleGetSessions(request, env) {
   const url = new URL(request.url);
   const projectId = url.searchParams.get("project_id");
+  const startDate = url.searchParams.get("start_date");
+  const endDate = url.searchParams.get("end_date");
+  const status = url.searchParams.get("status");
   const db = env.DB;
 
   let query = `
     SELECT s.*, p.name as project_name, p.client
     FROM sessions s
     JOIN projects p ON s.project_id = p.id
+    WHERE 1=1
   `;
   const params = [];
 
   if (projectId) {
-    query += " WHERE s.project_id = ?";
+    query += " AND s.project_id = ?";
     params.push(projectId);
   }
+  if (startDate) {
+    query += " AND s.start_time >= ?";
+    params.push(startDate);
+  }
+  if (endDate) {
+    query += " AND s.end_time <= ?";
+    params.push(endDate);
+  }
+  if (status) {
+    if (status === "active") {
+      query += " AND s.status != 'cancelled'";
+    } else {
+      query += " AND s.status = ?";
+      params.push(status);
+    }
+  } else {
+    query += " AND s.status != 'cancelled'";
+  }
+
   query += " ORDER BY s.start_time ASC";
 
   const sessions = await db.prepare(query).bind(...params).all();
   return json({ sessions: sessions.results });
 }
 
-// ── Delete a session ──
+// ── Delete a session (soft delete + Google Calendar cleanup) ──
 async function handleDeleteSession(request, env) {
   const url = new URL(request.url);
   const id = url.pathname.match(/\/api\/sessions\/(\d+)/)?.[1];
   if (!id) return error("Session ID required", 404);
 
   const db = env.DB;
-  await db.prepare("DELETE FROM sessions WHERE id = ?").bind(id).run();
-  return json({ success: true });
+
+  // Fetch session to get google_event_id
+  const session = await db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .bind(id)
+    .first();
+  if (!session) return error("Session not found", 404);
+
+  // Attempt to delete the Google Calendar event if it exists
+  if (session.google_event_id) {
+    try {
+      const token = await getValidToken(db, env);
+      if (token) {
+        await fetch(
+          `${GOOGLE_CALENDAR_API}/calendars/primary/events/${session.google_event_id}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token.accessToken}` } }
+        );
+      }
+    } catch (e) {
+      console.error("Failed to delete Google Calendar event:", e.message);
+    }
+  }
+
+  // Soft delete: set status to cancelled, clear google_event_id
+  await db
+    .prepare("UPDATE sessions SET status = 'cancelled', google_event_id = NULL WHERE id = ?")
+    .bind(id)
+    .run();
+
+  return json({ success: true, cancelled: true });
 }
 
 // ── Get resources ──
@@ -511,6 +566,113 @@ async function handleExportIcs(request) {
   });
 }
 
+// ── Google Calendar search ──
+async function handleCalendarSearch(request, env) {
+  const url = new URL(request.url);
+  const start = url.searchParams.get("start");
+  const end = url.searchParams.get("end");
+
+  if (!start || !end) return error("start and end query parameters required (ISO 8601)");
+
+  const token = await getValidToken(env.DB, env);
+  if (!token) return error("Google Calendar not connected", 401);
+
+  const params = new URLSearchParams({
+    timeMin: new Date(start).toISOString(),
+    timeMax: new Date(end).toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+  });
+
+  const resp = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/primary/events?${params}`,
+    { headers: { Authorization: `Bearer ${token.accessToken}` } }
+  );
+
+  if (!resp.ok) {
+    if (resp.status === 401) return error("Google Calendar access expired. Reconnect your calendar.", 401);
+    const errBody = await resp.text();
+    throw new Error(`Google Calendar API error ${resp.status}: ${errBody}`);
+  }
+
+  const data = await resp.json();
+  const events = (data.items || []).map((e) => ({
+    id: e.id,
+    summary: e.summary,
+    description: e.description,
+    start: e.start?.dateTime || e.start?.date,
+    end: e.end?.dateTime || e.end?.date,
+    creator: e.creator?.email,
+    htmlLink: e.htmlLink,
+  }));
+
+  return json({ events, count: events.length });
+}
+
+// ── Booking approval ──
+function isStudioRoom(roomAlias) {
+  // All studio rooms (ST1, ST2, TCHA, TCHB) require approval
+  if (!roomAlias) return false;
+  const a = roomAlias.toLowerCase();
+  return a === "st1" || a === "st2" || a === "tcha" || a === "tchb"
+    || a === "studio_a" || a === "studio_b" || a === "studio_a_tch" || a === "studio_b_tch"
+    || a === "studio 1" || a === "studio 2" || a === "studio a" || a === "studio b"
+    || a === "studio_1" || a === "studio_2";
+}
+
+async function handleGetApprovals(request, env) {
+  const db = env.DB;
+  const sessions = await db
+    .prepare(`
+      SELECT s.*, p.name as project_name, p.client
+      FROM sessions s
+      JOIN projects p ON s.project_id = p.id
+      WHERE s.status = 'pending_approval'
+      ORDER BY s.start_time ASC
+    `)
+    .all();
+  return json({ sessions: sessions.results });
+}
+
+async function handleApprovalAction(request, env) {
+  const url = new URL(request.url);
+  const id = url.pathname.match(/\/api\/approvals\/(\d+)/)?.[1];
+  if (!id) return error("Session ID required", 404);
+
+  const { action } = await request.json();
+  if (!["confirmed", "cancelled"].includes(action)) {
+    return error("action must be 'confirmed' or 'cancelled'");
+  }
+
+  const db = env.DB;
+
+  if (action === "cancelled") {
+    const session = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first();
+    if (session?.google_event_id) {
+      try {
+        const token = await getValidToken(db, env);
+        if (token) {
+          await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/primary/events/${session.google_event_id}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token.accessToken}` } }
+          );
+        }
+      } catch (e) {
+        console.error("Failed to delete Google Calendar event on rejection:", e.message);
+      }
+    }
+  }
+
+  const result = await db
+    .prepare("UPDATE sessions SET status = ?, google_event_id = CASE WHEN ? = 'cancelled' THEN NULL ELSE google_event_id END WHERE id = ? AND status = 'pending_approval'")
+    .bind(action, action, id)
+    .run();
+
+  if (result.meta?.changes === 0) return error("Session not found or already processed", 404);
+
+  return json({ success: true, newStatus: action });
+}
+
 // ── Google OAuth endpoints ──
 
 async function handleAuthGoogle(env) {
@@ -536,10 +698,11 @@ async function handleAuthCallback(request, env) {
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
 
-  const frontendUrl = CORS_ORIGIN;
-
   if (error || !code) {
-    return Response.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(error || "No auth code received")}`, 302);
+    return new Response(
+      `<html><body><script>window.close();</script></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   }
 
   try {
@@ -562,25 +725,33 @@ async function handleAuthCallback(request, env) {
 
     const data = await resp.json();
 
-    // Get user email from the access token
-    const userResp = await fetch(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
-      { headers: { Authorization: `Bearer ${data.access_token}` } }
-    );
-    const userInfo = await userResp.json();
+    // Decode id_token JWT to get email (no API call needed)
+    let email = "unknown";
+    if (data.id_token) {
+      try {
+        const payload = JSON.parse(atob(data.id_token.split(".")[1]));
+        email = payload.email || "unknown";
+      } catch (e) { /* fallthrough */ }
+    }
 
     await storeToken(
       env.DB,
-      userInfo.email,
+      email,
       data.access_token,
       data.refresh_token,
       data.expires_in || 3600
     );
 
-    return Response.redirect(`${frontendUrl}?auth=success&email=${encodeURIComponent(userInfo.email)}`, 302);
+    return new Response(
+      `<html><body style="background:#0a0a0a;color:#22c55e;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h1>Connected!</h1><p>Google Calendar linked as ${email}</p><p style="color:#6e6b66">This window will close in a moment...</p></div><script>setTimeout(() => window.close(), 1500);</script></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   } catch (e) {
     console.error("OAuth callback error:", e.message);
-    return Response.redirect(`${frontendUrl}?auth=error&message=${encodeURIComponent(e.message)}`, 302);
+    return new Response(
+      `<html><body style="background:#0a0a0a;color:#dc2626;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center"><div><h1>Connection Failed</h1><p>${e.message}</p><p style="color:#6e6b66">Close this window and try again.</p></div></body></html>`,
+      { headers: { "Content-Type": "text/html" } }
+    );
   }
 }
 
@@ -681,6 +852,21 @@ export default {
       // POST /api/auth/revoke — disconnect Google Calendar
       if (path === "/api/auth/revoke" && method === "POST") {
         return handleAuthRevoke(env);
+      }
+
+      // GET /api/calendar/search — search Google Calendar
+      if (path === "/api/calendar/search" && method === "GET") {
+        return handleCalendarSearch(request, env);
+      }
+
+      // GET /api/approvals — list pending sessions
+      if (path === "/api/approvals" && method === "GET") {
+        return handleGetApprovals(request, env);
+      }
+
+      // POST /api/approvals/:id — approve/reject
+      if (path.startsWith("/api/approvals/") && method === "POST") {
+        return handleApprovalAction(request, env);
       }
 
       // GET / — serve the scheduler UI

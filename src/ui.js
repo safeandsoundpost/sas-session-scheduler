@@ -66,6 +66,9 @@ export default `<!DOCTYPE html>
     .event-item { border: 1px solid var(--rule); border-radius: var(--radius); padding: 1rem; margin-bottom: 0.75rem; background: rgba(10,10,10,0.6); }
     .event-item.suggested { border-left: 3px solid var(--success); }
     .event-item.saved { border-left: 3px solid #60a5fa; }
+    .event-item.confirmed { border-left: 3px solid #60a5fa; }
+    .event-item.pending_approval { border-left: 3px solid var(--warning); }
+    .event-item.cancelled { border-left: 3px solid var(--grey); opacity: 0.5; }
     .event-item.conflict { border-left: 3px solid var(--conflict); background: rgba(220,38,38,0.08); }
     .event-title { font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
     .event-resources { margin-bottom: 0.25rem; display: flex; gap: 0.25rem; flex-wrap: wrap; }
@@ -93,7 +96,10 @@ export default `<!DOCTYPE html>
     .project-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(26,26,26,0.7); border-radius: 40px; font-size: 12px; margin-bottom: 1rem; }
     .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); animation: blink 2s infinite; }
     @keyframes blink { 0%,100%{opacity:0.8;} 50%{opacity:0.2;} }
-    .footer-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+    .footer-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--rule); background: rgba(26,26,26,0.3); min-height: 56px; }
+    .footer-actions-left { display: flex; align-items: center; }
+    .footer-actions-right { display: flex; align-items: center; gap: 0.75rem; }
+    .sync-label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--off-white); cursor: pointer; user-select: none; }
     .status-bar { display: flex; gap: 1rem; font-size: 0.7rem; color: var(--grey); margin-bottom: 1rem; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; }
     .status-dot.ok { background: var(--success); }
@@ -102,7 +108,7 @@ export default `<!DOCTYPE html>
     @keyframes spin { to { transform: rotate(360deg); } }
     footer { padding: 22px 40px; border-top: 1px solid var(--rule); display: flex; justify-content: space-between; background: rgba(10,10,10,0.5); backdrop-filter: blur(10px); }
     footer a { font-size: 12px; color: var(--grey); text-decoration: none; }
-    @media (max-width: 580px) { header { padding: 16px 20px; } .header-tag { display: none; } main { padding: 32px 16px; } footer { flex-direction: column; text-align: center; gap: 6px; } .footer-actions { flex-direction: column; } }
+    @media (max-width: 580px) { header { padding: 16px 20px; } .header-tag { display: none; } main { padding: 32px 16px; } footer { flex-direction: column; text-align: center; gap: 6px; } .footer-actions { flex-direction: column; align-items: stretch; gap: 0.75rem; } .footer-actions-right { flex-direction: column; gap: 0.5rem; } .footer-actions-right .btn { width: 100%; } }
   </style>
 </head>
 <body>
@@ -147,7 +153,7 @@ export default `<!DOCTYPE html>
       </div>
     </div>
     <div class="card">
-      <div class="card-header"><span>Resource Availability</span><span style="font-size:0.7rem">Next 30 days</span></div>
+      <div class="card-header"><span>Resource Availability</span><span style="font-size:0.7rem"><button class="btn btn-secondary btn-sm" id="searchCalendarBtn" style="display:none">Show Calendar Events</button> Next 30 days</span></div>
       <div class="card-body" id="resourcesList">
         <div style="text-align:center;color:var(--grey);padding:2rem">Loading resources...</div>
       </div>
@@ -163,11 +169,15 @@ export default `<!DOCTYPE html>
       <div style="text-align:center; color:var(--grey); padding:2rem">Generate suggestions or parse batch events to see sessions here</div>
     </div>
     <div class="footer-actions">
-      <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
-      <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--off-white);cursor:pointer">
-        <input type="checkbox" id="syncGoogleCheckbox" checked /> Sync to Google Calendar
-      </label>
-      <button class="btn btn-success" id="saveToDbBtn">Save to Database</button>
+      <div class="footer-actions-left">
+        <label class="sync-label">
+          <input type="checkbox" id="syncGoogleCheckbox" checked /> Sync to Google Calendar
+        </label>
+      </div>
+      <div class="footer-actions-right">
+        <button class="btn btn-secondary" id="generateIcsBtn">Export .ICS</button>
+        <button class="btn btn-success" id="saveToDbBtn">Save to Database</button>
+      </div>
     </div>
   </div>
 </main>
@@ -233,18 +243,14 @@ async function checkHealth() {
 // ── Google Calendar auth ──
 let googleConnected = false;
 
-function handleOAuthCallback() {
-  const params = new URLSearchParams(location.search);
-  if (params.get("auth") === "success") {
+// Listen for OAuth callback from popup
+window.addEventListener("message", (event) => {
+  if (event.origin !== location.origin) return;
+  if (event.data === "google-auth-success") {
     googleConnected = true;
     updateGoogleUI();
-    history.replaceState({}, "", location.pathname);
-  } else if (params.get("auth") === "error") {
-    const msg = params.get("message") || "Unknown error";
-    updateGoogleUI();
-    history.replaceState({}, "", location.pathname);
   }
-}
+});
 
 async function checkGoogleStatus() {
   try {
@@ -272,6 +278,8 @@ function updateGoogleUI() {
     status.style.color = "var(--success)";
     if (calStatus) calStatus.innerHTML = '<span class="status-dot ok"></span> Google: connected';
     if (syncCheck) syncCheck.disabled = false;
+    const searchBtn = document.getElementById("searchCalendarBtn");
+    if (searchBtn) searchBtn.style.display = "";
   } else {
     btn.textContent = "Connect Calendar";
     btn.className = "btn btn-primary btn-sm";
@@ -279,6 +287,8 @@ function updateGoogleUI() {
     status.style.display = "none";
     if (calStatus) calStatus.innerHTML = '<span class="status-dot" style="background:var(--grey)"></span> Google: not connected';
     if (syncCheck) { syncCheck.checked = false; syncCheck.disabled = true; }
+    const searchBtn = document.getElementById("searchCalendarBtn");
+    if (searchBtn) searchBtn.style.display = "none";
   }
 }
 
@@ -286,7 +296,18 @@ async function connectGoogle() {
   try {
     const data = await apiJson("/api/auth/google");
     if (data.url) {
-      location.href = data.url;
+      const popup = window.open(data.url, "google-oauth", "width=600,height=700");
+      if (!popup) {
+        alert("Please allow popups for this site to connect Google Calendar.");
+        return;
+      }
+      // Poll for connection after popup closes
+      const poll = setInterval(async () => {
+        if (popup.closed) {
+          clearInterval(poll);
+          await checkGoogleStatus();
+        }
+      }, 500);
     } else {
       alert("Google OAuth is not configured yet. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets.");
     }
@@ -304,6 +325,124 @@ async function disconnectGoogle() {
   } catch (e) {
     alert("Failed to disconnect: " + e.message);
   }
+}
+
+// ── Load stored sessions from DB ──
+function normalizeDbSession(s) {
+  const startDate = new Date(s.start_time);
+  return {
+    id: s.id,
+    project: s.project_name,
+    sessionNumber: s.session_number,
+    startTime: s.start_time,
+    endTime: s.end_time,
+    date: s.start_time.split("T")[0],
+    dateStr: startDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
+    resources: [s.resource_person, s.resource_room].filter(Boolean),
+    status: s.status,
+    googleEventId: s.google_event_id,
+    saved: true,
+    fromDb: true,
+  };
+}
+
+async function loadSessions() {
+  try {
+    const data = await apiJson("/api/sessions");
+    const dbSessions = (data.sessions || []).map(normalizeDbSession);
+    const existingIds = new Set(sessions.map(s => s.id));
+    for (const dbSess of dbSessions) {
+      if (!existingIds.has(dbSess.id)) {
+        sessions.push(dbSess);
+      }
+    }
+    renderSessions();
+  } catch (e) {
+    console.log("Could not load stored sessions:", e.message);
+  }
+}
+
+// ── Delete session from DB ──
+window.deleteSession = async function (id) {
+  if (!confirm("Delete this session? It will be cancelled and the Google Calendar event removed if synced.")) return;
+  try {
+    await api(\`/api/sessions/\${id}\`, { method: "DELETE" });
+    sessions = sessions.filter(s => s.id !== id);
+    renderSessions();
+  } catch (e) {
+    alert("Failed to delete: " + e.message);
+  }
+};
+
+// ── Booking approval ──
+window.approveSession = async function (id) {
+  try {
+    await api(\`/api/approvals/\${id}\`, {
+      method: "POST",
+      body: JSON.stringify({ action: "confirmed" }),
+    });
+    const session = sessions.find(s => s.id === id);
+    if (session) { session.status = "confirmed"; renderSessions(); }
+  } catch (e) {
+    alert("Failed to approve: " + e.message);
+  }
+};
+
+window.rejectSession = async function (id) {
+  if (!confirm("Reject this session? It will be cancelled.")) return;
+  try {
+    await api(\`/api/approvals/\${id}\`, {
+      method: "POST",
+      body: JSON.stringify({ action: "cancelled" }),
+    });
+    const session = sessions.find(s => s.id === id);
+    if (session) { session.status = "cancelled"; renderSessions(); }
+  } catch (e) {
+    alert("Failed to reject: " + e.message);
+  }
+};
+
+// ── Calendar search ──
+document.getElementById("searchCalendarBtn").onclick = async function () {
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+  try {
+    const start = new Date().toISOString();
+    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const data = await apiJson(\`/api/calendar/search?start=\${encodeURIComponent(start)}&end=\${encodeURIComponent(end)}\`);
+    renderCalendarEvents(data.events);
+  } catch (e) {
+    if (e.message.includes("not connected")) {
+      alert("Connect Google Calendar first to search for existing events.");
+    } else {
+      alert("Failed to search calendar: " + e.message);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Show Calendar Events";
+  }
+};
+
+function renderCalendarEvents(events) {
+  const existing = document.getElementById("calendarEventsSection");
+  if (existing) existing.remove();
+
+  let html = '<div id="calendarEventsSection" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--rule)">';
+  html += '<div style="font-weight:500;margin-bottom:0.75rem;font-size:0.8rem;color:var(--off-white)">External Calendar Events (next 30 days)</div>';
+  if (!events?.length) {
+    html += '<div style="color:var(--grey);font-size:0.75rem">No external events found</div>';
+  } else {
+    for (const e of events) {
+      const startStr = new Date(e.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      html += \`<div style="font-size:0.75rem;padding:0.4rem 0;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between">
+        <span>\${e.summary || "Untitled Event"}</span>
+        <span style="color:var(--grey)">\${startStr}</span>
+      </div>\`;
+    }
+  }
+  html += '</div>';
+  document.getElementById("resourcesList").insertAdjacentHTML("beforeend", html);
 }
 
 // ── Load resources ──
@@ -417,9 +556,11 @@ function parseReqLocal(t) {
   if (l.includes("weekdays only")) req.preferredDays = "weekdays";
   if (l.includes("thom")) req.preferredResources.push("thom");
   if (l.includes("jesse")) req.preferredResources.push("jesse");
-  if (l.includes("studio a") || l.includes("st1")) req.preferredResources.push("studio_a");
-  if (l.includes("studio b") || l.includes("st2")) req.preferredResources.push("studio_b");
-  if (!req.preferredResources.length) req.preferredResources = ["thom", "studio_a"];
+  if (l.includes("studio a") || l.includes("st1")) req.preferredResources.push("st1");
+  if (l.includes("studio b") || l.includes("st2")) req.preferredResources.push("st2");
+  if (l.includes("tcha") || l.includes("studio_a_tch")) req.preferredResources.push("tcha");
+  if (l.includes("tchb") || l.includes("studio_b_tch")) req.preferredResources.push("tchb");
+  if (!req.preferredResources.length) req.preferredResources = ["thom", "st1"];
   return req;
 }
 
@@ -444,8 +585,10 @@ function getExistingBookingsLocal() {
   return {
     thom: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }, { start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
     jesse: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 17, 0) }],
-    studio_a: [{ start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
-    studio_b: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }],
+    st1: [{ start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
+    st2: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }],
+    tcha: [{ start: new Date(2026, 4, 19, 9, 0), end: new Date(2026, 4, 19, 17, 0) }],
+    tchb: [],
   };
 }
 
@@ -581,18 +724,35 @@ function renderSessions() {
     html += \`<div class="session-group"><div class="session-header">\${proj} <span style="font-size:0.7rem;font-weight:300;color:var(--grey)">\${sess.length} session(s)</span></div>\`;
     for (const s of sess) {
       const ts = \`\${fmtTime(new Date(s.startTime))} → \${fmtTime(new Date(s.endTime))}\`;
-      const statusClass = s.saved ? "saved" : "suggested";
-      const statusLabel = s.saved ? " Saved" : " Ready";
+      const status = s.status || (s.saved ? "suggested" : "draft");
+      const statusClass = status === "confirmed" ? "confirmed" : status === "pending_approval" ? "pending_approval" : status === "cancelled" ? "cancelled" : s.fromDb ? "saved" : "suggested";
+      const statusLabel = status === "confirmed" ? "Confirmed" : status === "pending_approval" ? "Pending Approval (Alex Reinprecht)" : status === "cancelled" ? "Cancelled" : s.fromDb ? "Saved" : "Ready";
+      const statusColor = status === "pending_approval" ? "var(--warning)" : status === "cancelled" ? "var(--grey)" : "var(--success)";
+
+      let actionsHtml = "";
+      if (s.fromDb) {
+        actionsHtml += \`<button class="btn btn-danger btn-sm" onclick="deleteSession(\${s.id})">Delete</button>\`;
+      } else {
+        actionsHtml += \`<button class="btn btn-secondary btn-sm" onclick="removeSession(\${s.id})">Remove</button>\`;
+      }
+
+      if (status === "pending_approval") {
+        actionsHtml += \`<div style="margin-top:0.5rem;display:flex;gap:0.5rem">
+          <button class="btn btn-success btn-sm" onclick="approveSession(\${s.id})">Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectSession(\${s.id})">Reject</button>
+        </div>\`;
+      }
+
       html += \`<div class="event-item \${statusClass}">
         <div class="event-title">
           <span>Session \${s.sessionNumber}: \${s.dateStr} · \${ts}</span>
-          <button class="btn btn-secondary btn-sm" onclick="removeSession(\${s.id})">Remove</button>
+          \${actionsHtml}
         </div>
         <div class="event-resources">\${(s.resources || []).map(r => {
-          const cls = r.includes("studio") ? "room" : "person";
+          const cls = r && (r.includes("studio") || r.includes("st") || r.includes("tch")) ? "room" : "person";
           return \`<span class="resource-tag \${cls}">@\${r}</span>\`;
         }).join("")}</div>
-        <div style="color:var(--success);font-size:0.75rem">\${statusLabel}</div>
+        <div style="color:\${statusColor};font-size:0.75rem">\${statusLabel}</div>
       </div>\`;
     }
     html += "</div>";
@@ -669,6 +829,10 @@ document.getElementById("saveToDbBtn").onclick = async function () {
         console.log(\`Synced \${resp.googleEventIds?.length || 0} events to Google Calendar\`);
       }
     }
+    // Reload from DB to get correct statuses (pending_approval etc.)
+    await loadSessions();
+    // Remove local-only sessions that were just saved (they're now from DB)
+    sessions = sessions.filter(s => s.fromDb || s.saved);
     renderSessions();
     btn.textContent = "Saved!";
     setTimeout(() => { btn.textContent = "Save to Database"; btn.disabled = false; }, 2000);
@@ -731,18 +895,20 @@ document.getElementById("clearSmartBtn").onclick = function () {
 
 // ── Init ──
 async function init() {
-  handleOAuthCallback();
   const healthy = await checkHealth();
   if (healthy) {
     await loadResources();
+    await loadSessions();
     await checkGoogleStatus();
   } else {
     // Use mock resource data
     document.getElementById("resourcesList").innerHTML = \`
       <div class="resource-row"><span><span class="resource-tag person">Thom</span></span><span class="busy-badge">Busy May 17, 20</span></div>
       <div class="resource-row"><span><span class="resource-tag person">Jesse</span></span><span class="busy-badge">Busy May 17</span></div>
-      <div class="resource-row"><span><span class="resource-tag room">Studio A (ST1)</span></span><span class="busy-badge">Busy May 20</span></div>
-      <div class="resource-row"><span><span class="resource-tag room">Studio B (ST2)</span></span><span class="busy-badge">Busy May 17</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">ST1 (150 John St)</span></span><span class="busy-badge">Busy May 20</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">ST2 (150 John St)</span></span><span class="busy-badge">Busy May 17</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">TCHA (17 Central Hospital Ln)</span></span><span class="busy-badge">Busy May 19</span></div>
+      <div class="resource-row"><span><span class="resource-tag room">TCHB (17 Central Hospital Ln)</span></span><span class="free-badge">Free</span></div>
     \`;
   }
   document.getElementById("smartRequest").value = "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom";

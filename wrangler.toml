@@ -3,6 +3,9 @@ main = "src/index.js"
 compatibility_date = "2025-04-01"
 workers_dev = true
 
+[build]
+command = "node scripts/build-ui.js"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "sas-scheduler-db"
