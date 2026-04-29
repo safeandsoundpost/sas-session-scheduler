@@ -7,7 +7,7 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events";
-const REDIRECT_URI = "https://sas-scheduler.safeandsoundpost.workers.dev/api/auth/google/callback";
+const REDIRECT_URI = "https://sched.safeandsoundpost.com/api/auth/google/callback";
 
 function cors(request, headers = {}) {
   const origin = request?.headers?.get("Origin") || "";
