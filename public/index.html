@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Schedule — Safe & Sound Post</title>
+  <link rel="icon" href="https://f005.backblazeb2.com/file/safeandsound-uploads/From_Client/_General/EMAIL+NOTIFCATION/Assets/Safe%26Sound+Logo+B.png" />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -95,6 +96,8 @@
     .busy-badge { color: var(--conflict); font-size: 0.7rem; }
     .project-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(26,26,26,0.7); border-radius: 40px; font-size: 12px; margin-bottom: 1rem; }
     .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); animation: blink 2s infinite; }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
     @keyframes blink { 0%,100%{opacity:0.8;} 50%{opacity:0.2;} }
     .footer-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem 1.5rem; border-top: 1px solid var(--rule); background: rgba(26,26,26,0.3); min-height: 56px; }
     .footer-actions-left { display: flex; align-items: center; }
@@ -119,7 +122,7 @@
     <span class="env-badge" id="envBadge">LOCAL</span>
   </div>
   <div class="header-right" style="display:flex;align-items:center;gap:12px">
-    <button class="btn btn-secondary btn-sm" id="googleAuthBtn" style="display:none">Connect Calendar</button>
+    <button class="btn btn-primary btn-sm" id="googleAuthBtn" onclick="connectGoogle()">Connect Calendar</button>
     <span id="googleStatus" style="display:none;font-size:0.7rem;color:var(--success)"></span>
     <span class="header-tag">Scheduler</span>
   </div>
@@ -132,38 +135,128 @@
   </div>
 
   <div class="card" style="margin-bottom:28px">
-    <div class="card-header"><span>Smart Scheduling Request</span><span style="font-size:0.7rem;color:var(--grey)">Natural language → AI parses → finds available dates</span></div>
+    <div class="card-header"><span>New Booking</span></div>
     <div class="card-body">
-      <textarea id="smartRequest" class="smart-input" rows="3" placeholder='Example: "Happy Families, need 3 mixing days, 8 hours each, weekends only for thom"'></textarea>
-      <div style="display:flex; justify-content:flex-end; margin-top:1rem; gap:0.5rem">
-        <button class="btn btn-secondary" id="clearSmartBtn">Clear</button>
-        <button class="btn btn-primary" id="generateSuggestionsBtn">Find Available Dates</button>
-        <span id="suggestSpinner" style="display:none"><span class="spinner"></span></span>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem 1rem;font-size:0.8rem">
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Project Name</label>
+          <input id="bookingProject" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" placeholder="Project name" />
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Engineer</label>
+          <select id="bookingEngineer" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem">
+            <option value="thom">Thom</option><option value="jesse">Jesse</option>
+          </select>
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Studio</label>
+          <select id="bookingStudio" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem">
+            <option value="st1">ST1 (150 John St)</option><option value="st2">ST2 (150 John St)</option><option value="tcha">TCHA (17 Central Hospital Ln)</option><option value="tchb">TCHB (17 Central Hospital Ln)</option>
+          </select>
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Session Type</label>
+          <select id="bookingType" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem">
+            <option value="PREMIX">PREMIX</option><option value="FINAL MIX">FINAL MIX</option><option value="ADR RECORD">ADR RECORD</option><option value="SPOTTING SESSION">SPOTTING SESSION</option><option value="FOLEY RECORD">FOLEY RECORD</option><option value="MEETING">MEETING</option>
+          </select>
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Duration</label>
+          <select id="bookingDuration" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem">
+            <option value="2">2 hours</option><option value="4">4 hours</option><option value="8">8 hours</option><option value="custom">Custom</option>
+          </select>
+          <input id="bookingCustomDuration" type="number" min="1" max="16" placeholder="hrs" style="display:none;width:100%;margin-top:4px;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" />
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Sessions</label>
+          <input id="bookingNumSessions" type="number" min="1" max="20" value="1" style="width:100%;background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" />
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;align-items:center;margin-top:0.75rem;font-size:0.75rem;color:var(--off-white)">
+        <label style="cursor:pointer"><input type="radio" name="dateMode" value="find" checked onchange="toggleDateMode()" /> Find available dates</label>
+        <label style="cursor:pointer"><input type="radio" name="dateMode" value="specific" onchange="toggleDateMode()" /> Specific date & time</label>
+      </div>
+      <div id="findMode" style="display:flex;gap:1rem;align-items:center;margin-top:0.5rem;font-size:0.75rem">
+        <span style="color:var(--off-white)">Days:</span>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefDays" value="any" checked /> Any</label>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefDays" value="weekdays" /> Weekdays</label>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefDays" value="weekends" /> Weekends</label>
+        <span style="color:var(--off-white);margin-left:1rem">Time:</span>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefTime" value="any" checked /> Any</label>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefTime" value="morning" /> Morning</label>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefTime" value="afternoon" /> Afternoon</label>
+        <label style="cursor:pointer;color:var(--grey)"><input type="radio" name="prefTime" value="evening" /> Evening</label>
+      </div>
+      <div id="specificMode" style="display:none;margin-top:0.5rem;display:none;gap:0.75rem;align-items:end;font-size:0.75rem">
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Date</label>
+          <input type="date" id="specificDate" style="background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" />
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">Start</label>
+          <input type="time" id="specificStart" style="background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" />
+        </div>
+        <div>
+          <label style="color:var(--off-white);font-size:0.65rem;display:block;margin-bottom:2px">End</label>
+          <input type="time" id="specificEnd" style="background:rgba(10,10,10,0.8);color:var(--white);border:1px solid var(--rule-mid);border-radius:var(--radius);padding:0.4rem 0.6rem;font-family:inherit;font-size:0.8rem" />
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem;gap:0.5rem">
+        <button class="btn btn-secondary" id="clearBookingBtn">Clear</button>
+        <button class="btn btn-primary" id="submitBookingBtn">Find Available Dates</button>
+        <span id="bookingSpinner" style="display:none"><span class="spinner"></span></span>
       </div>
       <div id="suggestionsArea"></div>
     </div>
   </div>
 
-  <div class="grid-2col">
-    <div class="card">
-      <div class="card-header"><span>Batch Input</span><span style="font-size:0.7rem">Exact dates with @tags</span></div>
-      <div class="card-body">
-        <textarea id="batchText" class="batch-input" rows="4" placeholder='SACRED SPACE mix: May 20 6:30-8:30pm @thom @studio_a'></textarea>
-        <button class="btn btn-secondary" id="parseBatchBtn" style="margin-top:1rem; width:100%">Parse Batch Events</button>
-      </div>
+  <div class="card" style="margin-bottom:28px">
+    <div class="card-header">
+      <span style="display:flex;align-items:center;gap:12px">
+        <span>Calendar</span>
+        <button class="btn btn-primary btn-sm" id="syncDifuzeBtn" onclick="syncDifuze()">Sync DIFUZE</button>
+        <span id="syncDifuzeStatus" style="font-size:0.65rem;display:none"></span>
+      </span>
+      <span style="font-size:0.65rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="color:var(--grey)">Sources:</span>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="difuze" checked onchange="loadUpcoming()" /> <span style="color:var(--conflict)">DIFUZE</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="studio booking" checked onchange="loadUpcoming()" /> <span style="color:var(--success)">Studio Bookings</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="meeting" checked onchange="loadUpcoming()" /> <span style="color:#60a5fa">Meetings</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="festival" checked onchange="loadUpcoming()" /> <span style="color:#f59e0b">Festivals</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="safe&sound" checked onchange="loadUpcoming()" /> <span style="color:var(--off-white)">S&amp;S General</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="jesse" checked onchange="loadUpcoming()" /> <span style="color:var(--warning)">Jesse</span></label>
+        <label style="cursor:pointer;white-space:nowrap"><input type="checkbox" class="calSrcCb" value="freelance" checked onchange="loadUpcoming()" /> <span style="color:#a78bfa">Freelance</span></label>
+        <a href="#" onclick="document.querySelectorAll('.calSrcCb').forEach(cb=>cb.checked=false);loadUpcoming();return false" style="font-size:0.6rem;color:var(--grey);text-decoration:none;margin-left:4px">None</a>
+        <a href="#" onclick="document.querySelectorAll('.calSrcCb').forEach(cb=>cb.checked=true);loadUpcoming();return false" style="font-size:0.6rem;color:var(--warning);text-decoration:none">All</a>
+        <button class="btn btn-secondary btn-sm" id="refreshPreviewBtn" onclick="loadUpcoming()" style="margin-left:4px">Refresh</button>
+      </span>
     </div>
-    <div class="card">
-      <div class="card-header"><span>Resource Availability</span><span style="font-size:0.7rem"><button class="btn btn-secondary btn-sm" id="searchCalendarBtn" style="display:none">Show Calendar Events</button> Next 30 days</span></div>
-      <div class="card-body" id="resourcesList">
-        <div style="text-align:center;color:var(--grey);padding:2rem">Loading resources...</div>
-      </div>
+    <div class="card-body" id="upcomingList" style="padding:0.5rem 1rem 1rem">
+      <div style="text-align:center;color:var(--grey);padding:1rem;width:100%">Loading...</div>
+    </div>
+  </div>
+
+  <div class="card" id="pendingApprovalsCard" style="display:none;margin-bottom:28px">
+    <div class="card-header">
+      <span>Pending Approvals — Alex Reinprecht (<span id="pendingCount">0</span>)</span>
+      <span style="font-size:0.7rem;display:flex;align-items:center;gap:8px">
+        <button class="btn btn-secondary btn-sm" id="copyApprovalsBtn" onclick="copyApprovals()" style="display:none">Copy for Email</button>
+        <a href="#" onclick="clearPendingApprovals();return false" style="color:var(--conflict);text-decoration:none;font-size:0.65rem">Clear All</a>
+        <span style="color:var(--warning)">Requires booking approval</span>
+      </span>
+    </div>
+    <div class="card-body" id="pendingList">
+      <div style="text-align:center;color:var(--grey);padding:2rem">No pending approvals</div>
     </div>
   </div>
 
   <div class="card">
     <div class="card-header">
       <span>Session Queue (<span id="sessionCount">0</span> sessions)</span>
-      <span style="font-size:0.7rem"><span style="color:var(--success)">clear</span> / <span style="color:var(--conflict)">conflict</span></span>
+      <span style="font-size:0.7rem;display:flex;align-items:center;gap:8px">
+        <a href="#" onclick="clearAllSessions();return false" style="color:var(--conflict);text-decoration:none;font-size:0.65rem">Clear All</a>
+        <span style="color:var(--grey)"><span style="color:var(--success)">clear</span> / <span style="color:var(--conflict)">conflict</span></span>
+      </span>
     </div>
     <div class="card-body" id="eventsList">
       <div style="text-align:center; color:var(--grey); padding:2rem">Generate suggestions or parse batch events to see sessions here</div>
@@ -203,6 +296,246 @@ document.getElementById("envBadge").textContent = IS_LOCAL ? "LOCAL" : "PROD";
 let sessions = [];
 let suggestions = [];
 let currentRequest = null;
+
+function fmtTime(d) {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// ── Booking Form ──
+function toggleDateMode() {
+  const mode = document.querySelector('input[name="dateMode"]:checked').value;
+  document.getElementById("findMode").style.display = mode === "find" ? "flex" : "none";
+  document.getElementById("specificMode").style.display = mode === "specific" ? "flex" : "none";
+  document.getElementById("submitBookingBtn").textContent = mode === "find" ? "Find Available Dates" : "Add to Queue";
+}
+
+document.getElementById("bookingDuration").onchange = function () {
+  document.getElementById("bookingCustomDuration").style.display = this.value === "custom" ? "" : "none";
+};
+
+document.getElementById("submitBookingBtn").onclick = async function () {
+  const proj = document.getElementById("bookingProject").value.trim();
+  if (!proj) { alert("Enter a project name"); return; }
+  const engineer = document.getElementById("bookingEngineer").value;
+  const studio = document.getElementById("bookingStudio").value;
+  const sessionType = document.getElementById("bookingType").value;
+  const durVal = document.getElementById("bookingDuration").value;
+  const hours = durVal === "custom" ? parseInt(document.getElementById("bookingCustomDuration").value) || 4 : parseInt(durVal);
+  const numSessions = parseInt(document.getElementById("bookingNumSessions").value) || 1;
+  const mode = document.querySelector('input[name="dateMode"]:checked').value;
+  const summary = `${studio.toUpperCase()} ${proj.toUpperCase()} ${engineer.toUpperCase()} ${sessionType}`;
+
+  if (mode === "specific") {
+    const date = document.getElementById("specificDate").value;
+    const startTime = document.getElementById("specificStart").value;
+    const endTime = document.getElementById("specificEnd").value;
+    if (!date || !startTime || !endTime) { alert("Fill in date, start, and end time"); return; }
+    const [sy, sm, sd] = date.split("-").map(Number);
+    const [sh, smin] = startTime.split(":").map(Number);
+    const [eh, emin] = endTime.split(":").map(Number);
+    const start = new Date(sy, sm - 1, sd, sh, smin);
+    const end = new Date(sy, sm - 1, sd, eh, emin);
+    const hours = (end - start) / 3600000;
+
+    // Check conflicts via suggest
+    const btn = document.getElementById("submitBookingBtn");
+    const spinner = document.getElementById("bookingSpinner");
+    btn.disabled = true;
+    spinner.style.display = "";
+    try {
+      const result = await apiJson("/api/suggest", {
+        method: "POST",
+        body: JSON.stringify({
+          projectName: proj,
+          numberOfSessions: 1,
+          durationHours: hours,
+          preferredDays: "any",
+          preferredTimeOfDay: "any",
+          preferredPeople: [engineer],
+          preferredRooms: [studio],
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }),
+      });
+      const slots = result.suggestions || [];
+      const hasConflict = slots.length > 0 && slots[0].conflict;
+      if (hasConflict) {
+        const c = slots[0];
+        alert(`${c.conflictResource || "Studio"} unavailable — ${c.conflictSummary || "already booked"}`);
+      } else if (slots.length > 0 && !slots[0].conflict) {
+        sessions.push({
+          id: Date.now() + Math.random(), project: proj,
+          sessionNumber: sessions.filter(s => s.project === proj).length + 1,
+          startTime: start.toISOString(), endTime: end.toISOString(),
+          date: date, dateStr: start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
+          resources: [engineer, studio], sessionType, summary,
+        });
+        renderSessions();
+      } else {
+        // Figure out which constraint blocked it
+        const day = start.getDay();
+        const isWeekend = day === 0 || day === 6;
+        const startH = start.getHours() + start.getMinutes() / 60;
+        const endH = end.getHours() + end.getMinutes() / 60;
+        let reason = "";
+        if (!isWeekend && startH < 18.5) {
+          reason = "Studio bookings on weekdays must start at 6:30pm or later.";
+        } else if (!isWeekend && endH > 23) {
+          reason = "Weekday sessions cannot end past 11pm or cross midnight.";
+        } else {
+          reason = "This time conflicts with an existing booking or constraint.";
+        }
+        alert(`Not available — ${reason}`);
+      }
+    } catch (e) {
+      alert("Could not check conflicts: " + e.message);
+    } finally {
+      btn.disabled = false;
+      spinner.style.display = "none";
+    }
+    return;
+  }
+
+  const btn = this;
+  const spinner = document.getElementById("bookingSpinner");
+  btn.disabled = true;
+  spinner.style.display = "";
+  const prefDays = document.querySelector('input[name="prefDays"]:checked').value;
+  const prefTime = document.querySelector('input[name="prefTime"]:checked').value;
+
+  try {
+    const result = await apiJson("/api/suggest", {
+      method: "POST",
+      body: JSON.stringify({
+        projectName: proj,
+        numberOfSessions: numSessions,
+        durationHours: hours,
+        preferredDays: prefDays,
+        preferredTimeOfDay: prefTime,
+        preferredPeople: [engineer],
+        preferredRooms: [studio],
+      }),
+    });
+    suggestions = result.suggestions || [];
+    currentRequest = { projectName: proj, numberOfSessions: numSessions };
+    renderSuggestions(suggestions, currentRequest);
+  } catch (e) {
+    document.getElementById("suggestionsArea").innerHTML = `<div class="suggestion-card" style="color:var(--conflict)">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = "none";
+  }
+};
+
+document.getElementById("clearBookingBtn").onclick = function () {
+  document.getElementById("bookingProject").value = "";
+  document.getElementById("bookingNumSessions").value = "1";
+  document.getElementById("suggestionsArea").innerHTML = "";
+  suggestions = [];
+  currentRequest = null;
+};
+
+// ── Render suggestions ──
+function renderSuggestions(dates, req) {
+  const area = document.getElementById("suggestionsArea");
+  if (!dates.length) {
+    area.innerHTML = '<div class="suggestion-card"><div class="suggestion-header">No available dates found</div></div>';
+    return;
+  }
+  const unique = [];
+  const seen = new Set();
+  for (const d of dates) if (!seen.has(d.date)) { seen.add(d.date); unique.push(d); }
+  let html = `<div class="suggestion-card"><div class="suggestion-header">Found ${unique.length} available slots</div>`;
+  const available = unique.filter(d => !d.conflict);
+  const conflicts = unique.filter(d => d.conflict);
+  if (available.length) {
+    html += `<div style="font-size:0.7rem;color:var(--success);margin-bottom:0.5rem">${available.length} available</div>`;
+    available.forEach((d, idx) => {
+      const startTime = d.startTime ? new Date(d.startTime) : null;
+      const endTime = d.endTime ? new Date(d.endTime) : null;
+      const timeStr = startTime ? `${fmtTime(startTime)} → ${endTime ? fmtTime(endTime) : ""}` : d.window;
+      const isSelected = sessions.some(s => s.date === d.date && s.window === d.window);
+      html += `<div class="alternative-slot${isSelected ? " selected" : ""}" data-idx="${idx}">
+        <div style="flex:1"><strong>${d.dateStr}</strong><br><span style="font-size:0.75rem">${timeStr} · ${d.window || ""}</span></div>
+        <button class="btn btn-secondary btn-sm" onclick="selectSuggestion(${idx})">${isSelected ? "Selected" : "Select"}</button>
+      </div>`;
+    });
+  }
+  if (conflicts.length) {
+    html += `<div style="font-size:0.7rem;color:var(--conflict);margin-top:0.75rem;margin-bottom:0.5rem">${conflicts.length} conflicts (already booked)</div>`;
+    conflicts.forEach((d, idx) => {
+      const startTime = d.startTime ? new Date(d.startTime) : null;
+      const endTime = d.endTime ? new Date(d.endTime) : null;
+      const timeStr = startTime ? `${fmtTime(startTime)} → ${endTime ? fmtTime(endTime) : ""}` : d.window;
+      const conflictDetail = d.conflictSummary ? d.conflictSummary : `${d.conflictResource || "resource"} booked`;
+      html += `<div class="alternative-slot conflict" style="cursor:default">
+        <div style="flex:1"><strong>${d.dateStr}</strong><br><span style="font-size:0.75rem">${timeStr} · ${d.window || ""}</span><br><span style="font-size:0.65rem;color:var(--conflict)">${d.conflictResource || "Studio"} unavailable — ${conflictDetail}</span></div>
+        <span style="color:var(--conflict);font-size:0.7rem">CONFLICT</span>
+      </div>`;
+    });
+  }
+  html += `<div style="margin-top:0.75rem;text-align:center"><button class="btn btn-primary btn-sm" onclick="selectAllSuggestions()">Add All ${req?.numberOfSessions || 1} Dates</button></div></div>`;
+  area.innerHTML = html;
+}
+
+window.selectSuggestion = function (idx) {
+  const d = suggestions[idx];
+  if (!d || !currentRequest) return;
+  const alreadyAdded = sessions.find(s => s.date === d.date && s.window === d.window);
+  if (alreadyAdded) { sessions = sessions.filter(s => s !== alreadyAdded); }
+  else {
+    const engineer = document.getElementById("bookingEngineer").value;
+    const studio = document.getElementById("bookingStudio").value;
+    const sessionType = document.getElementById("bookingType").value;
+    const proj = currentRequest.projectName || "Untitled";
+    sessions.push({
+      id: Date.now() + idx, project: proj,
+      sessionNumber: sessions.filter(s => s.project === proj).length + 1,
+      startTime: d.startTime, endTime: d.endTime, date: d.date, dateStr: d.dateStr, window: d.window,
+      resources: [engineer, studio], sessionType,
+      summary: `${studio.toUpperCase()} ${proj.toUpperCase()} ${engineer.toUpperCase()} ${sessionType}`,
+    });
+  }
+  renderSessions();
+  document.querySelectorAll(".alternative-slot").forEach(el => {
+    const i = parseInt(el.dataset.idx);
+    const sd = suggestions[i];
+    if (!sd || !currentRequest) return;
+    const sel = sessions.some(s => s.date === sd.date && s.window === sd.window);
+    el.className = `alternative-slot${sel ? " selected" : ""}`;
+    const btn = el.querySelector("button");
+    if (btn) btn.textContent = sel ? "Selected" : "Select";
+  });
+};
+
+window.selectAllSuggestions = function () {
+  if (!currentRequest) return;
+  const engineer = document.getElementById("bookingEngineer").value;
+  const studio = document.getElementById("bookingStudio").value;
+  const sessionType = document.getElementById("bookingType").value;
+  const proj = currentRequest.projectName || "Untitled";
+  const evName = `${studio.toUpperCase()} ${proj.toUpperCase()} ${engineer.toUpperCase()} ${sessionType}`;
+  const toAdd = suggestions.slice(0, currentRequest.numberOfSessions || 1);
+  toAdd.forEach((d, i) => {
+    if (!sessions.find(s => s.date === d.date && s.window === d.window)) {
+      sessions.push({
+        id: Date.now() + i + Math.random(), project: proj,
+        sessionNumber: sessions.filter(s => s.project === proj).length + 1,
+        startTime: d.startTime, endTime: d.endTime, date: d.date, dateStr: d.dateStr, window: d.window,
+        resources: [engineer, studio], sessionType, summary: evName,
+      });
+    }
+  });
+  renderSessions();
+  document.querySelectorAll(".alternative-slot").forEach(el => {
+    const i = parseInt(el.dataset.idx);
+    const sd = suggestions[i];
+    if (!sd || !currentRequest) return;
+    const sel = sessions.some(s => s.date === sd.date && s.window === sd.window);
+    el.className = `alternative-slot${sel ? " selected" : ""}`;
+    const btn = el.querySelector("button"); if (btn) btn.textContent = sel ? "Selected" : "Select";
+  });
+};
 
 // ── API helpers ──
 async function api(path, options = {}) {
@@ -280,9 +613,8 @@ function updateGoogleUI() {
     status.style.color = "var(--success)";
     if (calStatus) calStatus.innerHTML = '<span class="status-dot ok"></span> Google: connected';
     if (syncCheck) syncCheck.disabled = false;
-    const searchBtn = document.getElementById("searchCalendarBtn");
-    if (searchBtn) searchBtn.style.display = "";
     loadCalendars();
+    loadUpcoming();
   } else {
     btn.textContent = "Connect Calendar";
     btn.className = "btn btn-primary btn-sm";
@@ -290,11 +622,7 @@ function updateGoogleUI() {
     status.style.display = "none";
     if (calStatus) calStatus.innerHTML = '<span class="status-dot" style="background:var(--grey)"></span> Google: not connected';
     if (syncCheck) { syncCheck.checked = false; syncCheck.disabled = true; }
-    const searchBtn = document.getElementById("searchCalendarBtn");
-    if (searchBtn) searchBtn.style.display = "none";
-    // Reset calendar dropdown
-    const sel = document.getElementById("calendarSelect");
-    sel.innerHTML = '<option value="primary">Primary Calendar</option>';
+    document.getElementById("calendarSelect").innerHTML = '<option value="primary">Primary Calendar</option>';
   }
 }
 
@@ -331,15 +659,132 @@ async function loadCalendars() {
     const data = await apiJson("/api/calendars");
     const sel = document.getElementById("calendarSelect");
     sel.innerHTML = "";
+    let foundStudioBookings = false;
     for (const cal of (data.calendars || [])) {
       const opt = document.createElement("option");
       opt.value = cal.id;
       opt.textContent = cal.summary + (cal.primary ? " (default)" : "");
-      if (cal.primary) opt.selected = true;
+      const isStudioBookings = cal.summary && cal.summary.toLowerCase().includes("studio booking");
+      if (isStudioBookings) { opt.selected = true; foundStudioBookings = true; }
+      else if (!foundStudioBookings && cal.primary) opt.selected = true;
       sel.appendChild(opt);
     }
   } catch (e) {
     console.log("Could not load calendars:", e.message);
+  }
+}
+
+// ── Load upcoming week calendar preview ──
+async function loadUpcoming() {
+  const btn = document.getElementById("refreshPreviewBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Refreshing..."; }
+  try {
+    const data = await apiJson("/api/calendar/preview");
+    let events = data.events || [];
+    // Filter by checked calendar sources
+    const checkedSources = [...document.querySelectorAll(".calSrcCb:checked")].map(cb => cb.value);
+    events = events.filter(e => {
+      const cn = (e.calendarName || "").toLowerCase();
+      return checkedSources.some(s => cn.includes(s));
+    });
+    const cont = document.getElementById("upcomingList");
+    if (!events.length) {
+      cont.innerHTML = '<div style="text-align:center;color:var(--grey);padding:1rem;width:100%">No events this week</div>';
+      return;
+    }
+    // Group by date (handle both dateTime and date-only formats)
+    const byDate = new Map();
+    for (const e of events) {
+      // Parse date: if it has a T or timezone offset, use local parsing; otherwise treat as local date
+      let d;
+      if (e.start.includes("T") || e.start.includes("+") || e.start.includes("Z")) {
+        d = new Date(e.start);
+      } else {
+        // Date-only string like "2026-04-30" — parse as local midnight
+        const [y, m, day] = e.start.split("-").map(Number);
+        d = new Date(y, m - 1, day);
+      }
+      // Skip past events
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      if (d < now) continue;
+
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      if (!byDate.has(key)) {
+        const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+        byDate.set(key, { label, events: [] });
+      }
+      byDate.get(key).events.push(e);
+    }
+
+    // Auto-refresh every 5 minutes
+    clearInterval(window._calRefreshTimer);
+    window._calRefreshTimer = setInterval(loadUpcoming, 5 * 60 * 1000);
+
+    // Build calendar grid: Sunday-Saturday, next 30 days
+    const today = new Date(); today.setHours(0,0,0,0);
+    const startDay = new Date(today);
+    startDay.setDate(today.getDate() - today.getDay()); // Start from this Sunday
+    const totalDays = 30 + today.getDay(); // Enough days to cover 30 from today
+    const calDays = [];
+    for (let i = 0; i < totalDays; i++) {
+      const day = new Date(startDay);
+      day.setDate(startDay.getDate() + i);
+      day.setHours(0,0,0,0);
+      const key = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,"0")}-${String(day.getDate()).padStart(2,"0")}`;
+      const label = day.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
+      const isToday = day.getTime() === today.getTime();
+      const isPast = day < today;
+      calDays.push({ key, label, events: byDate.get(key)?.events || [], isToday, isPast });
+    }
+
+    const calColors = {
+      "difuze": "var(--conflict)",
+      "studio booking": "var(--success)",
+      "meeting": "#60a5fa",
+      "festival": "#f59e0b",
+      "jesse": "var(--warning)",
+      "freelance": "#a78bfa",
+      "safe&sound": "var(--off-white)",
+    };
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    // Find max events per cell to determine uniform height
+    let maxEvents = 0;
+    for (const dayData of calDays) { if (dayData.events.length > maxEvents) maxEvents = dayData.events.length; }
+    const cellHeight = Math.max(120, 30 + maxEvents * 20);
+
+    let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--rule)">`;
+    // Header row
+    for (const dn of dayNames) {
+      html += `<div style="text-align:center;font-weight:500;color:var(--off-white);padding:0.3rem 0;border-bottom:1px solid var(--rule-mid);font-size:0.7rem">${dn}</div>`;
+    }
+    // Day cells
+    for (let i = 0; i < calDays.length; i++) {
+      const dayData = calDays[i];
+      const isLastRow = (i + 7 >= calDays.length);
+      html += `<div style="min-height:${cellHeight}px;padding:4px 4px;word-break:break-word;background:rgba(15,15,15,0.9);${dayData.isPast ? "opacity:0.4" : ""}">
+        <div style="font-size:0.7rem;${dayData.isToday ? "color:var(--warning);font-weight:600" : "color:var(--off-white)"};margin-bottom:3px">${dayData.label}</div>`;
+      for (const e of dayData.events) {
+        const st = e.start ? new Date(e.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+        const cn = (e.calendarName || "").toLowerCase();
+        let color = "var(--grey)";
+        for (const [k, v] of Object.entries(calColors)) { if (cn.includes(k)) { color = v; break; } }
+        html += `<div style="font-size:0.62rem;line-height:1.3;padding-bottom:2px" title="${e.summary}">
+          <span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:${color};margin-right:3px;vertical-align:middle"></span><span style="font-size:0.55rem;color:var(--grey)">${st}</span> ${e.summary || "—"}
+        </div>`;
+      }
+      if (!dayData.events.length && !dayData.isPast) {
+        html += `<div style="font-size:0.55rem;color:var(--grey)">—</div>`;
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+    cont.innerHTML = html;
+  } catch (e) {
+    document.getElementById("upcomingList").innerHTML = `<div style="text-align:center;color:var(--conflict);padding:1rem;width:100%">Calendar preview unavailable — ${e.message || "unknown error"}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Refresh"; }
   }
 }
 
@@ -418,320 +863,70 @@ window.rejectSession = async function (id) {
   }
 };
 
-// ── Calendar search ──
-document.getElementById("searchCalendarBtn").onclick = async function () {
-  const btn = this;
-  btn.disabled = true;
-  btn.textContent = "Loading...";
-  try {
-    const start = new Date().toISOString();
-    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const calId = document.getElementById("calendarSelect").value;
-    const data = await apiJson(`/api/calendar/search?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&calendar_id=${encodeURIComponent(calId)}`);
-    renderCalendarEvents(data.events);
-  } catch (e) {
-    if (e.message.includes("not connected")) {
-      alert("Connect Google Calendar first to search for existing events.");
-    } else {
-      alert("Failed to search calendar: " + e.message);
-    }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Show Calendar Events";
-  }
+window.clearPendingApprovals = function () {
+  const pending = sessions.filter(s => s.status === "pending_approval" && s.fromDb);
+  if (!pending.length) return;
+  if (!confirm(`Reject all ${pending.length} pending approvals?`)) return;
+  Promise.all(pending.map(s => api(`/api/approvals/${s.id}`, { method: "POST", body: JSON.stringify({ action: "cancelled" }) }).catch(() => {})))
+    .finally(() => {
+      sessions = sessions.filter(s => !pending.includes(s));
+      renderSessions();
+    });
 };
 
-function renderCalendarEvents(events) {
-  const existing = document.getElementById("calendarEventsSection");
-  if (existing) existing.remove();
-
-  let html = '<div id="calendarEventsSection" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--rule)">';
-  html += '<div style="font-weight:500;margin-bottom:0.75rem;font-size:0.8rem;color:var(--off-white)">External Calendar Events (next 30 days)</div>';
-  if (!events?.length) {
-    html += '<div style="color:var(--grey);font-size:0.75rem">No external events found</div>';
-  } else {
-    for (const e of events) {
-      const startStr = new Date(e.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-      html += `<div style="font-size:0.75rem;padding:0.4rem 0;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between">
-        <span>${e.summary || "Untitled Event"}</span>
-        <span style="color:var(--grey)">${startStr}</span>
-      </div>`;
-    }
+window.copyApprovals = function () {
+  const pending = sessions.filter(s => s.status === "pending_approval");
+  if (!pending.length) { alert("No pending approvals"); return; }
+  // Sort by date
+  pending.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  let text = "";
+  for (const s of pending) {
+    const d = new Date(s.startTime);
+    const day = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const st = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const et = new Date(s.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const room = (s.resources || []).find(r => r && (r.includes("st") || r.includes("tch") || r.includes("studio")));
+    const engineer = (s.resources || []).find(r => r && !r.includes("st") && !r.includes("tch") && !r.includes("studio"));
+    const engName = engineer ? engineer.charAt(0).toUpperCase() + engineer.slice(1) : "?";
+    text += `${(room || "?").toUpperCase()} | ${day} ${st}-${et} | ${engName}\n`;
   }
-  html += '</div>';
-  document.getElementById("resourcesList").insertAdjacentHTML("beforeend", html);
-}
-
-// ── Load resources ──
-async function loadResources() {
-  try {
-    const data = await apiJson("/api/resources");
-    renderResources(data.resources);
-  } catch (e) {
-    document.getElementById("resourcesList").innerHTML =
-      '<div style="text-align:center;color:var(--grey);padding:1rem">Could not load resources</div>';
-  }
-}
-
-function renderResources(resources) {
-  const container = document.getElementById("resourcesList");
-  if (!resources?.length) {
-    container.innerHTML = '<div style="text-align:center;color:var(--grey);padding:1rem">No resources configured</div>';
-    return;
-  }
-  let html = "";
-  for (const r of resources) {
-    const icon = r.type === "person" ? "" : "";
-    const tagClass = r.type === "person" ? "person" : "room";
-    const badge = r.busyPeriods?.length
-      ? `<span class="busy-badge">Busy: ${r.busyPeriods.map(p => formatDateRange(p.start, p.end)).join(", ")}</span>`
-      : '<span class="free-badge">Free</span>';
-    html += `<div class="resource-row">
-      <span><span class="resource-tag ${tagClass}">${icon} ${r.canonicalName}</span></span>
-      <span>${badge}</span>
-    </div>`;
-  }
-  container.innerHTML = html;
-}
-
-function formatDateRange(start, end) {
-  const s = new Date(start);
-  const e = new Date(end);
-  const opts = { month: "short", day: "numeric" };
-  return `${s.toLocaleDateString("en-US", opts)} ${fmtTime(s)}`;
-}
-
-function fmtTime(d) {
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-// ── Smart Scheduling ──
-document.getElementById("generateSuggestionsBtn").onclick = async function () {
-  const text = document.getElementById("smartRequest").value.trim();
-  if (!text) { alert("Please describe your scheduling needs"); return; }
-
-  const btn = this;
-  const spinner = document.getElementById("suggestSpinner");
-  btn.disabled = true;
-  spinner.style.display = "";
-
-  try {
-    // Step 1: Parse with Claude
-    const parsed = await apiJson("/api/parse", {
-      method: "POST",
-      body: JSON.stringify({ text }),
-    });
-    currentRequest = parsed;
-
-    // Step 2: Get suggestions
-    const result = await apiJson("/api/suggest", {
-      method: "POST",
-      body: JSON.stringify(parsed),
-    });
-    suggestions = result.suggestions || [];
-    renderSuggestions(suggestions, parsed);
-  } catch (e) {
-    document.getElementById("suggestionsArea").innerHTML =
-      `<div class="suggestion-card"><div class="suggestion-header">Error</div><p>${e.message}</p><p style="font-size:0.75rem;color:var(--grey);margin-top:0.5rem">Falling back to local parser...</p></div>`;
-    // Fallback to local parsing
-    fallbackParseAndSuggest(text);
-  } finally {
-    btn.disabled = false;
-    spinner.style.display = "none";
-  }
-};
-
-// ── Local fallback (when API is unavailable) ──
-function fallbackParseAndSuggest(text) {
-  const parsed = parseReqLocal(text);
-  currentRequest = parsed;
-  const dates = findDatesLocal(parsed);
-  suggestions = dates.map((d, i) => ({
-    date: d.date.toISOString().split("T")[0],
-    dateStr: d.dateStr,
-    startTime: d.startTime || new Date(d.date.setHours(9,0,0,0)).toISOString(),
-    endTime: d.endTime || new Date(new Date(d.date).setHours(17,0,0,0)).toISOString(),
-    window: d.window || "Morning",
-    resources: parsed.preferredResources || ["thom", "studio_a"],
-  }));
-  renderSuggestions(suggestions, parsed);
-}
-
-function parseReqLocal(t) {
-  const l = t.toLowerCase();
-  const req = { projectName: "", durationHours: 8, numberOfSessions: 1, preferredDays: "any", preferredResources: [] };
-  const pm = t.match(/^([^,]+?)(?:\s+needs|\s+for|,)/i);
-  req.projectName = pm ? pm[1].trim() : "Untitled";
-  const sm = t.match(/(\d+)\s*(?:mixing\s*)?(?:days|sessions)/i);
-  if (sm) req.numberOfSessions = parseInt(sm[1]);
-  const dm = t.match(/(\d+)\s*hours?\s*each/i);
-  if (dm) req.durationHours = parseInt(dm[1]);
-  if (l.includes("evening")) req.preferredTimeOfDay = "evening";
-  else if (l.includes("morning")) req.preferredTimeOfDay = "morning";
-  else if (l.includes("afternoon")) req.preferredTimeOfDay = "afternoon";
-  if (l.includes("weekends only")) req.preferredDays = "weekends";
-  if (l.includes("weekdays only")) req.preferredDays = "weekdays";
-  if (l.includes("thom")) req.preferredResources.push("thom");
-  if (l.includes("jesse")) req.preferredResources.push("jesse");
-  if (l.includes("studio a") || l.includes("st1")) req.preferredResources.push("st1");
-  if (l.includes("studio b") || l.includes("st2")) req.preferredResources.push("st2");
-  if (l.includes("tcha") || l.includes("studio_a_tch")) req.preferredResources.push("tcha");
-  if (l.includes("tchb") || l.includes("studio_b_tch")) req.preferredResources.push("tchb");
-  if (!req.preferredResources.length) req.preferredResources = ["thom", "st1"];
-  return req;
-}
-
-function findDatesLocal(req) {
-  const dates = [];
-  const st = new Date(2026, 4, 16);
-  const en = new Date(2026, 5, 15);
-  for (let d = new Date(st); d <= en; d.setDate(d.getDate() + 1)) {
-    const wk = d.getDay() === 0 || d.getDay() === 6;
-    if (req.preferredDays === "weekends" && !wk) continue;
-    if (req.preferredDays === "weekdays" && wk) continue;
-    const av = checkFullDayLocal(req.preferredResources, d);
-    if (av.available) {
-      dates.push({ date: new Date(d), window: av.window, dateStr: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }), startTime: new Date(d.setHours(9,0,0,0)).toISOString(), endTime: new Date(new Date(d).setHours(17,0,0,0)).toISOString() });
-    }
-    if (dates.length >= req.numberOfSessions * 3) break;
-  }
-  return dates;
-}
-
-function getExistingBookingsLocal() {
-  return {
-    thom: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }, { start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
-    jesse: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 17, 0) }],
-    st1: [{ start: new Date(2026, 4, 20, 18, 0), end: new Date(2026, 4, 20, 22, 0) }],
-    st2: [{ start: new Date(2026, 4, 17, 14, 0), end: new Date(2026, 4, 17, 18, 0) }],
-    tcha: [{ start: new Date(2026, 4, 19, 9, 0), end: new Date(2026, 4, 19, 17, 0) }],
-    tchb: [],
-  };
-}
-
-function checkConflictLocal(r, s, e) {
-  const b = getExistingBookingsLocal()[r] || [];
-  for (const bk of b) if (s < bk.end && e > bk.start) return true;
-  return false;
-}
-
-function checkFullDayLocal(resources, d) {
-  const windows = [[9, 13, "Morning"], [13, 17, "Afternoon"], [18, 22, "Evening"]];
-  for (const wh of windows) {
-    const st = new Date(d); st.setHours(wh[0], 0);
-    const et = new Date(d); et.setHours(wh[1], 0);
-    let ok = true;
-    for (const res of resources) { if (checkConflictLocal(res, st, et)) { ok = false; break; } }
-    if (ok) return { available: true, window: wh[2] };
-  }
-  return { available: false };
-}
-
-// ── Render suggestions ──
-function renderSuggestions(dates, req) {
-  const area = document.getElementById("suggestionsArea");
-  if (!dates.length) {
-    area.innerHTML = '<div class="suggestion-card"><div class="suggestion-header">No available dates found in the next 30 days</div></div>';
-    return;
-  }
-
-  const unique = [];
-  const seen = new Set();
-  for (const d of dates) {
-    if (!seen.has(d.date)) { seen.add(d.date); unique.push(d); }
-  }
-
-  const display = unique.slice(0, (req?.numberOfSessions || 1) * 3);
-  let html = `<div class="suggestion-card"><div class="suggestion-header">Found ${dates.length} available slots — showing ${display.length}</div>`;
-
-  display.forEach((d, idx) => {
-    const startTime = d.startTime ? new Date(d.startTime) : null;
-    const endTime = d.endTime ? new Date(d.endTime) : null;
-    const timeStr = startTime ? `${fmtTime(startTime)} → ${endTime ? fmtTime(endTime) : ""}` : d.window;
-    const isSelected = sessions.some(s => s.date === d.date && s.window === d.window);
-    html += `<div class="alternative-slot${isSelected ? " selected" : ""}" data-idx="${idx}">
-      <div>
-        <strong>${d.dateStr}</strong><br>
-        <span style="font-size:0.75rem">${timeStr} · ${d.window || ""}</span>
-        <div style="font-size:0.7rem;margin-top:0.25rem">${(d.resources || req?.preferredResources || []).map(r => {
-          const cls = r.includes("studio") ? "room" : "person";
-          return `<span class="resource-tag ${cls}">@${r}: free</span>`;
-        }).join(" ")}</div>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="selectSuggestion(${idx})">${isSelected ? "Selected" : "Select"}</button>
-    </div>`;
-  });
-
-  if (display.length >= (req?.numberOfSessions || 1)) {
-    html += `<div style="margin-top:0.75rem; text-align:center">
-      <button class="btn btn-primary btn-sm" onclick="selectAllSuggestions()">Add All ${req?.numberOfSessions || 1} Dates</button>
-    </div>`;
-  }
-
-  html += "</div>";
-  area.innerHTML = html;
-}
-
-// ── Select suggestions ──
-window.selectSuggestion = function (idx) {
-  const d = suggestions[idx];
-  if (!d || !currentRequest) return;
-
-  const alreadyAdded = sessions.find(s => s.date === d.date && s.window === d.window);
-  if (alreadyAdded) {
-    sessions = sessions.filter(s => s !== alreadyAdded);
-  } else {
-    sessions.push({
-      id: Date.now() + idx,
-      project: currentRequest.projectName || "Untitled",
-      sessionNumber: sessions.filter(s => s.project === (currentRequest.projectName || "Untitled")).length + 1,
-      startTime: d.startTime,
-      endTime: d.endTime,
-      date: d.date,
-      dateStr: d.dateStr,
-      window: d.window,
-      resources: d.resources || currentRequest.preferredResources || [],
-    });
-  }
-  renderSessions();
-  renderSuggestions(suggestions, currentRequest);
-};
-
-window.selectAllSuggestions = function () {
-  if (!currentRequest) return;
-  const toAdd = suggestions.slice(0, currentRequest.numberOfSessions || 1);
-  toAdd.forEach((d, i) => {
-    if (!sessions.find(s => s.date === d.date && s.window === d.window)) {
-      sessions.push({
-        id: Date.now() + i + Math.random(),
-        project: currentRequest.projectName || "Untitled",
-        sessionNumber: sessions.filter(s => s.project === (currentRequest.projectName || "Untitled")).length + 1,
-        startTime: d.startTime,
-        endTime: d.endTime,
-        date: d.date,
-        dateStr: d.dateStr,
-        window: d.window,
-        resources: d.resources || currentRequest.preferredResources || [],
-      });
-    }
-  });
-  renderSessions();
-  renderSuggestions(suggestions, currentRequest);
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById("copyApprovalsBtn");
+    btn.textContent = "Copied!";
+    setTimeout(() => btn.textContent = "Copy for Email", 1500);
+  }).catch(() => alert("Could not copy — check clipboard permissions"));
 };
 
 // ── Render session queue ──
 function renderSessions() {
-  const cont = document.getElementById("eventsList");
-  const cnt = document.getElementById("sessionCount");
-  cnt.textContent = sessions.length;
+  const pending = sessions.filter(s => s.status === "pending_approval");
+  const nonPending = sessions.filter(s => s.status !== "pending_approval");
 
-  if (!sessions.length) {
-    cont.innerHTML = '<div style="text-align:center;color:var(--grey);padding:2rem">No sessions in queue. Generate suggestions or parse batch events.</div>';
-    return;
+  document.getElementById("sessionCount").textContent = nonPending.length;
+  document.getElementById("pendingCount").textContent = pending.length;
+
+  const pendingCard = document.getElementById("pendingApprovalsCard");
+  const pendingCont = document.getElementById("pendingList");
+  document.getElementById("copyApprovalsBtn").style.display = pending.length ? "" : "none";
+  if (pending.length) {
+    pendingCard.style.display = "";
+    pendingCont.innerHTML = renderSessionGroup(pending, true);
+  } else {
+    pendingCard.style.display = "none";
+    pendingCont.innerHTML = '<div style="text-align:center;color:var(--grey);padding:2rem">No pending approvals</div>';
   }
 
+  const cont = document.getElementById("eventsList");
+  if (!nonPending.length) {
+    cont.innerHTML = '<div style="text-align:center;color:var(--grey);padding:2rem">No sessions in queue. Use the booking form above.</div>';
+    return;
+  }
+  cont.innerHTML = renderSessionGroup(nonPending, false);
+}
+
+function renderSessionGroup(sessionsList, isPending) {
   const grouped = {};
-  for (const s of sessions) {
+  for (const s of sessionsList) {
     if (!grouped[s.project]) grouped[s.project] = [];
     grouped[s.project].push(s);
   }
@@ -753,7 +948,7 @@ function renderSessions() {
         actionsHtml += `<button class="btn btn-secondary btn-sm" onclick="removeSession(${s.id})">Remove</button>`;
       }
 
-      if (status === "pending_approval") {
+      if (isPending) {
         actionsHtml += `<div style="margin-top:0.5rem;display:flex;gap:0.5rem">
           <button class="btn btn-success btn-sm" onclick="approveSession(${s.id})">Approve</button>
           <button class="btn btn-danger btn-sm" onclick="rejectSession(${s.id})">Reject</button>
@@ -765,6 +960,7 @@ function renderSessions() {
           <span>Session ${s.sessionNumber}: ${s.dateStr} · ${ts}</span>
           ${actionsHtml}
         </div>
+        <div style="font-size:0.75rem;margin-bottom:0.25rem"><strong>Project:</strong> ${proj}${s.sessionType ? ` · <strong>Type:</strong> ${s.sessionType}` : ""}</div>
         <div class="event-resources">${(s.resources || []).map(r => {
           const cls = r && (r.includes("studio") || r.includes("st") || r.includes("tch")) ? "room" : "person";
           return `<span class="resource-tag ${cls}">@${r}</span>`;
@@ -774,7 +970,91 @@ function renderSessions() {
     }
     html += "</div>";
   }
-  cont.innerHTML = html;
+  return html;
+}
+
+let syncPollTimer = null;
+
+async function syncDifuze() {
+  const btn = document.getElementById("syncDifuzeBtn");
+  const status = document.getElementById("syncDifuzeStatus");
+  const TRIGGER_URL = "https://difuze-calendar-sync.safeandsoundpost.workers.dev/api/trigger";
+  const STATUS_URL = "https://difuze-calendar-sync.safeandsoundpost.workers.dev/api/trigger/status";
+
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = "Syncing…";
+  status.style.display = "";
+  status.style.color = "var(--warning)";
+  status.innerHTML = '<span class="spinner"></span>';
+
+  clearTimeout(syncPollTimer);
+
+  try {
+    const triggerResp = await fetch(TRIGGER_URL, { method: "POST" });
+    const trigger = await triggerResp.json();
+
+    if (triggerResp.status === 409) {
+      status.textContent = "Sync already in progress";
+      status.style.color = "var(--warning)";
+      btn.disabled = false;
+      btn.textContent = "Sync DIFUZE";
+      setTimeout(() => { status.style.display = "none"; }, 3000);
+      return;
+    }
+
+    if (!triggerResp.ok) throw new Error(trigger.error || "Failed to create trigger");
+
+    const startTime = Date.now();
+    const poll = async () => {
+      try {
+        const r = await fetch(STATUS_URL);
+        const t = await r.json();
+
+        if (t.status === "completed") {
+          let summary = "&#10003; Synced";
+          if (t.result && t.result.output) {
+            const m = t.result.output.match(/Imported (\d+) events/);
+            if (m) summary += " — " + m[1] + " events imported";
+          }
+          status.innerHTML = summary;
+          btn.disabled = false;
+          btn.textContent = "Sync DIFUZE";
+          loadUpcoming();
+          setTimeout(() => { status.style.display = "none"; }, 5000);
+        } else if (t.status === "failed") {
+          const err = (t.result && t.result.output) ? t.result.output.slice(-200) : "Unknown error";
+          status.innerHTML = "&#10007; Sync failed";
+          status.style.color = "var(--conflict)";
+          status.title = err;
+          btn.disabled = false;
+          btn.textContent = "Sync DIFUZE";
+          setTimeout(() => { status.style.display = "none"; }, 8000);
+        } else if (Date.now() - startTime > 300000) {
+          status.textContent = "Sync timed out";
+          status.style.color = "var(--conflict)";
+          btn.disabled = false;
+          btn.textContent = "Sync DIFUZE";
+          setTimeout(() => { status.style.display = "none"; }, 5000);
+        } else {
+          syncPollTimer = setTimeout(poll, 3000);
+        }
+      } catch (e) {
+        status.textContent = "Connection error";
+        status.style.color = "var(--conflict)";
+        btn.disabled = false;
+        btn.textContent = "Sync DIFUZE";
+        setTimeout(() => { status.style.display = "none"; }, 5000);
+      }
+    };
+    poll();
+  } catch (e) {
+    status.textContent = "Error: " + e.message;
+    status.style.color = "var(--conflict)";
+    btn.disabled = false;
+    btn.textContent = "Sync DIFUZE";
+    setTimeout(() => { status.style.display = "none"; }, 5000);
+  }
 }
 
 window.removeSession = function (id) {
@@ -783,32 +1063,18 @@ window.removeSession = function (id) {
   if (suggestions.length) renderSuggestions(suggestions, currentRequest);
 };
 
-// ── Batch parsing ──
-document.getElementById("parseBatchBtn").onclick = function () {
-  const txt = document.getElementById("batchText").value;
-  if (!txt.trim()) return;
-  const lines = txt.split("\n");
-  for (const line of lines) {
-    const m = line.match(/^(.+?)\s+mix:?\s*(\w+)\s+(\d+)\s+(\d+):(\d+)-(\d+):(\d+)\s+@(\w+)\s+@(\w+)/i);
-    if (m) {
-      const [_, proj, mon, day, sh, sm, eh, em, r1, r2] = m;
-      const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-      const monIdx = months[mon.toLowerCase().slice(0, 3)] ?? 4;
-      const st = new Date(2026, monIdx, parseInt(day), parseInt(sh), parseInt(sm));
-      const et = new Date(2026, monIdx, parseInt(day), parseInt(eh), parseInt(em));
-      sessions.push({
-        id: Date.now() + Math.random(),
-        project: proj.trim(),
-        sessionNumber: 1,
-        startTime: st.toISOString(),
-        endTime: et.toISOString(),
-        date: st.toISOString().split("T")[0],
-        dateStr: st.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
-        resources: [r1, r2],
-      });
-    }
-  }
-  renderSessions();
+window.clearAllSessions = function () {
+  if (!sessions.length) return;
+  const dbCount = sessions.filter(s => s.fromDb).length;
+  const msg = dbCount ? `Remove all ${sessions.length} sessions? (${dbCount} from database will be soft-deleted)` : `Remove all ${sessions.length} sessions from queue?`;
+  if (!confirm(msg)) return;
+  // Delete DB sessions
+  const dbSessions = sessions.filter(s => s.fromDb);
+  Promise.all(dbSessions.map(s => api(`/api/sessions/${s.id}`, { method: "DELETE" }).catch(() => {})))
+    .finally(() => {
+      sessions = [];
+      renderSessions();
+    });
 };
 
 // ── Save to DB ──
@@ -819,13 +1085,17 @@ document.getElementById("saveToDbBtn").onclick = async function () {
   btn.textContent = "Pushing...";
 
   try {
+    // Only push local sessions (not already in DB)
+    const toPush = sessions.filter(s => !s.fromDb);
+    if (!toPush.length) { alert("No new sessions to push."); btn.disabled = false; btn.textContent = "Push to Google Calendar"; return; }
+
     const grouped = {};
-    for (const s of sessions) grouped[s.project] = grouped[s.project] || [];
-    for (const s of sessions) {
+    for (const s of toPush) {
       if (!grouped[s.project]) grouped[s.project] = [];
       grouped[s.project].push(s);
     }
 
+    let syncedCount = 0;
     for (const [projectName, sess] of Object.entries(grouped)) {
       const resp = await apiJson("/api/sessions", {
         method: "POST",
@@ -839,21 +1109,31 @@ document.getElementById("saveToDbBtn").onclick = async function () {
             sessionNumber: i + 1,
             person: s.resources?.[0] || null,
             room: s.resources?.[1] || null,
+            summary: s.summary || null,
+            sessionType: s.sessionType || null,
           })),
         }),
       });
       for (const s of sess) s.saved = true;
       if (resp.googleCalendarSynced) {
-        console.log(`Synced ${resp.googleEventIds?.length || 0} events to Google Calendar`);
+        syncedCount += resp.googleEventIds?.length || 0;
       }
     }
-    // Reload from DB to get correct statuses (pending_approval etc.)
+    // Remove pushed sessions and reload fresh from DB
+    sessions = sessions.filter(s => s.fromDb);
     await loadSessions();
-    // Remove local-only sessions that were just saved (they're now from DB)
-    sessions = sessions.filter(s => s.fromDb || s.saved);
     renderSessions();
-    btn.textContent = "Pushed!";
-    setTimeout(() => { btn.textContent = "Push to Google Calendar"; btn.disabled = false; }, 2000);
+
+    if (syncedCount > 0) {
+      btn.textContent = `Pushed + ${syncedCount} calendar event(s)!`;
+    } else if (document.getElementById("syncGoogleCheckbox").checked) {
+      const gErr = resp.googleError || "unknown error";
+      btn.textContent = `Sync failed: ${gErr}`;
+      if (gErr.includes("token")) alert("Google Calendar sync failed — try disconnecting and reconnecting.");
+    } else {
+      btn.textContent = "Saved to DB!";
+    }
+    setTimeout(() => { btn.textContent = "Push to Google Calendar"; btn.disabled = false; }, 3000);
   } catch (e) {
     alert(`Save failed: ${e.message}`);
     btn.textContent = "Push to Google Calendar";
@@ -903,19 +1183,11 @@ document.getElementById("generateIcsBtn").onclick = async function () {
   }
 };
 
-// ── Clear ──
-document.getElementById("clearSmartBtn").onclick = function () {
-  document.getElementById("smartRequest").value = "";
-  document.getElementById("suggestionsArea").innerHTML = "";
-  suggestions = [];
-  currentRequest = null;
-};
-
 // ── Init ──
 async function init() {
   const healthy = await checkHealth();
   if (healthy) {
-    await loadResources();
+    await loadUpcoming();
     await loadSessions();
     await checkGoogleStatus();
   } else {
@@ -930,6 +1202,8 @@ async function init() {
     `;
   }
 }
+
+window.syncDifuze = syncDifuze;
 
 init();
 </script>

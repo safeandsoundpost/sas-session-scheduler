@@ -135,7 +135,7 @@ async function getValidToken(db, env) {
   }
 }
 
-async function createCalendarEvent(accessToken, session, projectName, calendarId) {
+async function createCalendarEvent(accessToken, session, projectName, calendarId, statusSuffix = "") {
   const calId = calendarId || "primary";
   const start = new Date(session.startTime);
   const end = new Date(session.endTime);
@@ -148,15 +148,16 @@ async function createCalendarEvent(accessToken, session, projectName, calendarId
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        summary: `${projectName} - Mix Session ${session.sessionNumber || 1}`,
+        summary: (session.summary || `${session.resource_room || "Studio"} ${projectName} ${session.resource_person || ""}`.trim()) + statusSuffix,
         description: `Resources: ${[session.resource_person, session.resource_room].filter(Boolean).join(", ") || "none"}`,
+        location: (session.resource_room || "").toLowerCase().includes("tch") ? "17 Central Hospital Lane, Toronto" : (session.resource_room && (session.resource_room.toLowerCase().includes("st") || session.resource_room.toLowerCase().includes("studio"))) ? "150 John St, Toronto" : undefined,
         start: {
           dateTime: start.toISOString(),
-          timeZone: "America/Chicago",
+          timeZone: "America/Toronto",
         },
         end: {
           dateTime: end.toISOString(),
-          timeZone: "America/Chicago",
+          timeZone: "America/Toronto",
         },
       }),
     }
@@ -239,7 +240,7 @@ async function handleParse(request, env) {
   try {
     const result = await callDeepSeek(
       env.DEEPSEEK_API_KEY,
-      "You extract structured scheduling requests from natural language. Map people names to short forms: thom, jesse, alex. Map rooms: ST1 (150 John St) = st1 (also studio_a), ST2 (150 John St) = st2 (also studio_b), TCHA at 17 Central Hospital Lane = tcha (also studio_a_tch), TCHB at 17 Central Hospital Lane = tchb (also studio_b_tch). TCHA and TCHB are Difuze Studios managed by Alex Reinprecht requiring booking approval. All studio bookings require approval. If time of day isn't specified, default to 'any'. If days aren't specified, default to 'any'. Return only the structured data.",
+      "You extract structured scheduling requests from natural language. Map people names to short forms: thom, jesse. Map rooms: ST1 (150 John St) = st1 (also studio_a), ST2 (150 John St) = st2 (also studio_b), TCHA at 17 Central Hospital Lane = tcha (also studio_a_tch), TCHB at 17 Central Hospital Lane = tchb (also studio_b_tch). All studio bookings require approval from Alex Reinprecht (Difuze Studio Manager). If time of day isn't specified, default to 'any'. If days aren't specified, default to 'any'. Return only the structured data.",
       text,
       tools
     );
@@ -254,6 +255,85 @@ async function handleParse(request, env) {
   }
 }
 
+// ── Fetch Google Calendar busy periods for people ──
+async function fetchGoogleBusyPeriods(db, env, people, rooms, rangeStart, rangeEnd) {
+  const token = await getValidToken(db, env);
+  if (!token) return {};
+
+  try {
+    const calResp = await fetch(
+      `${GOOGLE_CALENDAR_API}/users/me/calendarList`,
+      { headers: { Authorization: `Bearer ${token.accessToken}` } }
+    );
+    if (!calResp.ok) return {};
+    const calData = await calResp.json();
+    const calendars = calData.items || [];
+
+    // Find the DIFUZE master studio calendar
+    const difuzeCal = calendars.find(c => (c.summary || "").toLowerCase().includes("difuze"));
+
+    const busyByResource = {};
+    const calendarsToFetch = [];
+
+    // Always fetch DIFUZE calendar for studio conflicts
+    if (difuzeCal) calendarsToFetch.push({ id: difuzeCal.id, type: "studio" });
+
+    // Match person calendars
+    for (const cal of calendars) {
+      const name = (cal.summary || "").toLowerCase();
+      if (name.includes("can be booked over") || name.includes("book over")) continue;
+      for (const person of people) {
+        if (name.includes(person.toLowerCase())) {
+          calendarsToFetch.push({ id: cal.id, type: "person", person });
+        }
+      }
+    }
+
+    if (!calendarsToFetch.length) return {};
+
+    // Fetch events
+    for (const c of calendarsToFetch) {
+      const params = new URLSearchParams({
+        timeMin: rangeStart.toISOString(),
+        timeMax: rangeEnd.toISOString(),
+        singleEvents: "true",
+        orderBy: "startTime",
+      });
+      const evResp = await fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(c.id)}/events?${params}`,
+        { headers: { Authorization: `Bearer ${token.accessToken}` } }
+      );
+      if (!evResp.ok) continue;
+      const evData = await evResp.json();
+      for (const e of (evData.items || [])) {
+        const evStart = e.start?.dateTime || e.start?.date;
+        const evEnd = e.end?.dateTime || e.end?.date;
+        if (!evStart || !evEnd) continue;
+        const busy = { start: new Date(evStart), end: new Date(evEnd), summary: e.summary || "Untitled" };
+
+        if (c.type === "person") {
+          if (!busyByResource[c.person]) busyByResource[c.person] = [];
+          busyByResource[c.person].push(busy);
+        } else if (c.type === "studio") {
+          // Parse studio code from event summary (e.g. "ST1-MARY..." → st1)
+          const summary = (e.summary || "").toLowerCase();
+          for (const room of rooms) {
+            if (summary.startsWith(room.toLowerCase() + "-") || summary.includes(" " + room.toLowerCase() + "-") || summary.startsWith(room.toLowerCase() + " ")) {
+              if (!busyByResource[room]) busyByResource[room] = [];
+              busyByResource[room].push(busy);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return busyByResource;
+  } catch (e) {
+    console.error("Google Calendar fetch for conflicts failed:", e.message);
+    return {};
+  }
+}
+
 // ── Find available slots ──
 async function handleSuggest(request, env) {
   const { projectName, numberOfSessions, durationHours, preferredDays, preferredTimeOfDay, preferredPeople, preferredRooms, startDate, endDate } = await request.json();
@@ -263,28 +343,36 @@ async function handleSuggest(request, env) {
   const hours = durationHours || 8;
   const numSessions = numberOfSessions;
   const people = preferredPeople?.length ? preferredPeople : ["thom", "jesse"];
-  const rooms = preferredRooms?.length ? preferredRooms : ["studio_a", "studio_b"];
+  const rooms = preferredRooms?.length ? preferredRooms : ["st1", "st2", "tcha", "tchb"];
   const allResources = [...people, ...rooms];
 
   const db = env.DB;
   const suggestions = [];
-  const maxSuggestions = numSessions * 5;
+  const maxSuggestions = Math.max(numSessions * 10, 60);
 
-  // Default to next 30 days
-  const start = startDate ? new Date(startDate) : new Date();
+  // Toronto offset: EDT=UTC-4 (Mar-Nov), EST=UTC-5 (Nov-Mar)
+  const now = new Date();
+  const torOffset = (now.getMonth() >= 2 && now.getMonth() <= 10) ? -4 : -5;
+
+  // Default to next 60 days
+  const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
   start.setHours(0, 0, 0, 0);
-  const end = endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const end = endDate ? new Date(endDate) : new Date(start.getTime() + 60 * 24 * 60 * 60 * 1000);
 
-  // Time windows in hours: [startHour, endHour, label]
+  // Pre-fetch Google Calendar busy periods for all requested people
+  const googleBusy = await fetchGoogleBusyPeriods(db, env, people, rooms, start, end);
+
+  // Time windows as [startHour, startMin, label]. Session must end by 10pm.
+  const WORKDAY_END = 23; // 11pm Chicago time
   const timeWindows = [];
   if (!preferredTimeOfDay || preferredTimeOfDay === "any") {
-    timeWindows.push([9, 13, "Morning"], [13, 17, "Afternoon"], [18, 22, "Evening"]);
+    timeWindows.push([9, 0, "Full Day (9am)"], [13, 0, "Afternoon (1pm)"], [18, 30, "Evening (6:30pm)"]);
   } else if (preferredTimeOfDay === "morning") {
-    timeWindows.push([9, 13, "Morning"]);
+    timeWindows.push([9, 0, "Morning"]);
   } else if (preferredTimeOfDay === "afternoon") {
-    timeWindows.push([13, 17, "Afternoon"]);
+    timeWindows.push([13, 0, "Afternoon"]);
   } else if (preferredTimeOfDay === "evening") {
-    timeWindows.push([18, 22, "Evening"]);
+    timeWindows.push([18, 30, "Evening"]);
   }
 
   for (let d = new Date(start); d <= end && suggestions.length < maxSuggestions; d.setDate(d.getDate() + 1)) {
@@ -294,28 +382,65 @@ async function handleSuggest(request, env) {
     if (preferredDays === "weekends" && !isWeekend) continue;
     if (preferredDays === "weekdays" && isWeekend) continue;
 
-    for (const [winStart, winEnd, label] of timeWindows) {
+    for (const [winStart, winMin, label] of timeWindows) {
       if (suggestions.length >= maxSuggestions) break;
 
       const slotStart = new Date(d);
-      slotStart.setHours(winStart, 0, 0, 0);
+      slotStart.setUTCHours(winStart - torOffset, winMin, 0, 0);
       const slotEnd = new Date(d);
-      slotEnd.setHours(winStart + hours, 0, 0, 0);
+      slotEnd.setUTCHours(winStart - torOffset + hours, winMin, 0, 0);
 
-      // Make sure session fits in window
-      if (slotEnd.getHours() > winEnd) continue;
+      // Weekday constraint: session must not end past 11pm Toronto time
+      if (!isWeekend) {
+        // Compute Toronto-local dates (UTC + offset hours)
+        const torStartDay = new Date(slotStart.getTime() + torOffset * 3600000).getUTCDate();
+        const torEndDay = new Date(slotEnd.getTime() + torOffset * 3600000).getUTCDate();
+        const torEndHour = new Date(slotEnd.getTime() + torOffset * 3600000).getUTCHours();
+        const torEndMin = new Date(slotEnd.getTime() + torOffset * 3600000).getUTCMinutes();
+        const torEndDecimal = torEndHour + (torEndMin / 60);
+        // Block if crosses Toronto midnight (different Toronto day)
+        if (torEndDay !== torStartDay) continue;
+        // Block if ends past 11pm
+        if (torEndDecimal > WORKDAY_END) continue;
+      }
       // Don't suggest past times
       if (slotStart < new Date()) continue;
+      // Studio constraint: weekdays must start 6:30pm or later Chicago time
+      const hasRoom = rooms.some(r => allResources.includes(r));
+      if (hasRoom && !isWeekend) {
+        const chiStartHour = slotStart.getUTCHours() + torOffset;
+        const chiStartMin = slotStart.getUTCMinutes();
+        if (chiStartHour < 18 || (chiStartHour === 18 && chiStartMin < 30)) continue;
+      }
 
       let allFree = true;
+      let conflictResource = null;
+      let conflictSummary = null;
       for (const resource of allResources) {
         if (await isResourceBusy(db, resource, slotStart, slotEnd)) {
           allFree = false;
+          conflictResource = resource;
+          conflictSummary = "Already booked in scheduler";
           break;
         }
+        const busy = googleBusy[resource];
+        if (busy) {
+          for (const b of busy) {
+            if (slotStart < b.end && slotEnd > b.start) {
+              allFree = false;
+              conflictResource = resource;
+              conflictSummary = b.summary || `Google Calendar event`;
+              break;
+            }
+          }
+        }
+        if (!allFree) break;
       }
 
-      if (allFree) {
+      const wouldConflictWithConstraint = (!isWeekend && hasRoom &&
+        (slotStart.getUTCHours() + torOffset < 18 || (slotStart.getUTCHours() + torOffset === 18 && slotStart.getUTCMinutes() < 30)));
+
+      if (!wouldConflictWithConstraint) {
         suggestions.push({
           date: d.toISOString().split("T")[0],
           dateStr: d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
@@ -323,6 +448,9 @@ async function handleSuggest(request, env) {
           endTime: slotEnd.toISOString(),
           window: label,
           resources: allResources,
+          conflict: !allFree,
+          conflictResource: conflictResource || undefined,
+          conflictSummary: conflictSummary || undefined,
         });
       }
     }
@@ -339,24 +467,43 @@ async function handleSaveSessions(request, env) {
 
   const db = env.DB;
 
-  // Check for conflicts before saving
+  // Check for conflicts before saving (local DB + Google Calendar)
+  const people = [...new Set(sessions.map(s => s.person || s.resources?.[0]).filter(Boolean))];
+  const rooms = [...new Set(sessions.map(s => s.room || s.resources?.[1]).filter(Boolean))];
+  const sessionRangeEnd = new Date(Math.max(...sessions.map(s => new Date(s.endTime).getTime())));
+  const sessionRangeStart = new Date(Math.min(...sessions.map(s => new Date(s.startTime).getTime())));
+  const googleBusy = await fetchGoogleBusyPeriods(db, env, people, rooms, sessionRangeStart, sessionRangeEnd);
+
   for (const s of sessions) {
     const start = new Date(s.startTime);
     const end = new Date(s.endTime);
     const resources = s.resources || [s.person, s.room].filter(Boolean);
     for (const resource of resources) {
+      // Check local DB
       if (await isResourceBusy(db, resource, start, end)) {
         return error(`Conflict: ${resource} is busy during ${start.toISOString()} - ${end.toISOString()}`, 409);
+      }
+      // Check Google Calendar (DIFUZE + person calendars)
+      const busy = googleBusy[resource];
+      if (busy) {
+        for (const b of busy) {
+          if (start < b.end && end > b.start) {
+            return error(`Conflict: ${resource} is booked on Google Calendar during this time (DIFUZE or personal calendar)`, 409);
+          }
+        }
       }
     }
   }
 
   // Get Google token if available
   let googleToken = null;
+  let googleError = null;
   if (createGoogleEvents && env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     try {
       googleToken = await getValidToken(db, env);
+      if (!googleToken) googleError = "No valid Google token stored";
     } catch (e) {
+      googleError = e.message;
       console.error("Google auth error:", e.message);
     }
   }
@@ -375,6 +522,9 @@ async function handleSaveSessions(request, env) {
     const person = s.person || s.resources?.[0] || null;
     const room = s.room || s.resources?.[1] || null;
 
+    const status = (isStudioRoom(room) && s.sessionType !== "MEETING") ? "pending_approval" : "suggested";
+    const statusSuffix = status === "pending_approval" ? " (PENDING APPROVAL)" : "";
+
     // Create Google Calendar event
     let googleEventId = null;
     const calId = calendarId || "primary";
@@ -386,14 +536,14 @@ async function handleSaveSessions(request, env) {
           sessionNumber: s.sessionNumber || i + 1,
           resource_person: person,
           resource_room: room,
-        }, projectName, calId);
+          summary: s.summary || null,
+        }, projectName, calId, statusSuffix);
         googleEventIds.push(googleEventId);
       } catch (e) {
+        googleError = e.message;
         console.error("Google Calendar event creation failed:", e.message);
       }
     }
-
-    const status = isStudioRoom(room) ? "pending_approval" : "suggested";
 
     const result = await db
       .prepare(
@@ -419,6 +569,7 @@ async function handleSaveSessions(request, env) {
     projectId: project.id,
     sessionIds: insertedIds,
     googleCalendarSynced: googleEventIds.length > 0,
+    googleError: googleError || undefined,
     googleEventIds: googleEventIds.length ? googleEventIds : undefined,
   }, 201);
 }
@@ -609,6 +760,65 @@ async function handleListCalendars(request, env) {
   }
 }
 
+// ── Unified calendar preview ──
+async function handleCalendarPreview(request, env) {
+  const token = await getValidToken(env.DB, env);
+  if (!token) return error("Google Calendar not connected", 401);
+
+  try {
+    // Get all calendars
+    const calResp = await fetch(
+      `${GOOGLE_CALENDAR_API}/users/me/calendarList`,
+      { headers: { Authorization: `Bearer ${token.accessToken}` } }
+    );
+    if (!calResp.ok) return error("Could not fetch calendars", calResp.status);
+    const calData = await calResp.json();
+    const calendars = calData.items || [];
+
+    // Target calendars by name
+    const targetNames = ["studio booking", "difuze", "meeting", "festival", "networking", "safe&sound general", "jesse edit", "freelance"];
+    const targetCals = calendars.filter(c => {
+      const name = (c.summary || "").toLowerCase();
+      return targetNames.some(t => name.includes(t));
+    });
+
+    // Fetch events for next 7 days from each
+    const now = new Date();
+    const weekEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const allEvents = [];
+
+    for (const cal of targetCals) {
+      const params = new URLSearchParams({
+        timeMin: now.toISOString(),
+        timeMax: weekEnd.toISOString(),
+        singleEvents: "true",
+        orderBy: "startTime",
+        maxResults: "50",
+      });
+      const evResp = await fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(cal.id)}/events?${params}`,
+        { headers: { Authorization: `Bearer ${token.accessToken}` } }
+      );
+      if (evResp.ok) {
+        const evData = await evResp.json();
+        for (const e of (evData.items || [])) {
+          allEvents.push({
+            summary: e.summary,
+            start: e.start?.dateTime || e.start?.date,
+            end: e.end?.dateTime || e.end?.date,
+            calendarName: cal.summary,
+          });
+        }
+      }
+    }
+
+    allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    return json({ events: allEvents });
+  } catch (e) {
+    return error(e.message, 500);
+  }
+}
+
 // ── Google Calendar search ──
 async function handleCalendarSearch(request, env) {
   try {
@@ -694,21 +904,39 @@ async function handleApprovalAction(request, env) {
 
   const db = env.DB;
 
-  if (action === "cancelled") {
-    const session = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first();
-    if (session?.google_event_id) {
-      const calId = session.calendar_id || "primary";
-      try {
-        const token = await getValidToken(db, env);
-        if (token) {
+  const session = await db.prepare("SELECT * FROM sessions WHERE id = ?").bind(id).first();
+  if (session?.google_event_id) {
+    const calId = session.calendar_id || "primary";
+    try {
+      const token = await getValidToken(db, env);
+      if (token) {
+        if (action === "cancelled") {
           await fetch(
             `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${session.google_event_id}`,
             { method: "DELETE", headers: { Authorization: `Bearer ${token.accessToken}` } }
           );
+        } else if (action === "confirmed") {
+          // Update event summary to replace PENDING APPROVAL with CONFIRMED
+          const evResp = await fetch(
+            `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${session.google_event_id}`,
+            { headers: { Authorization: `Bearer ${token.accessToken}` } }
+          );
+          if (evResp.ok) {
+            const evData = await evResp.json();
+            const newSummary = (evData.summary || "").replace("(PENDING APPROVAL)", "(CONFIRMED)");
+            await fetch(
+              `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${session.google_event_id}`,
+              {
+                method: "PATCH",
+                headers: { Authorization: `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ summary: newSummary }),
+              }
+            );
+          }
         }
-      } catch (e) {
-        console.error("Failed to delete Google Calendar event on rejection:", e.message);
       }
+    } catch (e) {
+      console.error(`Failed to update Google Calendar event on ${action}:`, e.message);
     }
   }
 
@@ -906,6 +1134,11 @@ export default {
       // GET /api/calendars — list Google Calendars
       if (path === "/api/calendars" && method === "GET") {
         return handleListCalendars(request, env);
+      }
+
+      // GET /api/calendar/preview — unified calendar preview
+      if (path === "/api/calendar/preview" && method === "GET") {
+        return handleCalendarPreview(request, env);
       }
 
       // GET /api/calendar/search — search Google Calendar
